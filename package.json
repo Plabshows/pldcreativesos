@@ -1,0 +1,33 @@
+{
+  "name": "performance-lab-os",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1",
+    "build": "next build",
+    "start": "next start --hostname 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "next": "16.3.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.116.0",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "lucide-react": "^0.577.0",
+    "zod": "^4.3.6",
+    "pdf-lib": "^1.17.1",
+    "papaparse": "^5.5.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "@types/node": "^22.19.15",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/papaparse": "^5.5.2",
+    "vitest": "^3.2.4",
+    "@electric-sql/pglite": "^0.3.14"
+  }
+}
