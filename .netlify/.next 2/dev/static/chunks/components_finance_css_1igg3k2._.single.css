@@ -1,0 +1,139 @@
+/* [project]/components/finance.css [app-client] (css) */
+.fin-summary {
+  color: #323338;
+  background: #fff;
+  border: 1px solid #e1e4eb;
+  border-radius: 10px;
+  margin: 20px 0;
+  padding: 20px;
+}
+
+.fin-summary header {
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  display: flex;
+}
+
+.fin-summary h2 {
+  margin: 0 0 5px;
+  font-size: 19px;
+}
+
+.fin-summary p {
+  color: #676879;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.fin-summary select {
+  background: #fff;
+  border: 1px solid #dce1e8;
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.fin-cards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+  display: grid;
+}
+
+.fin-cards > div {
+  background: #f5f8fc;
+  border-radius: 6px;
+  padding: 14px;
+}
+
+.fin-cards span, .fin-cards strong {
+  display: block;
+}
+
+.fin-cards span {
+  color: #676879;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.fin-cards strong {
+  font-size: 21px;
+}
+
+.fin-scroll {
+  overflow: auto;
+}
+
+.fin-summary table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 950px;
+}
+
+.fin-summary th, .fin-summary td {
+  text-align: right;
+  border-bottom: 1px solid #e1e4eb;
+  padding: 10px;
+  font-size: 12px;
+}
+
+.fin-summary summary {
+  cursor: pointer;
+  color: #0073ea;
+  padding: 8px 0;
+}
+
+.eb-board .fin-paid {
+  color: #fff;
+  background: #c9364f;
+  border: 0;
+  border-radius: 4px;
+  min-width: 110px;
+  padding: 8px;
+}
+
+.eb-board .fin-paid.yes {
+  background: #00865d;
+}
+
+.eb-board .fin-paid.unknown {
+  background: #676879;
+}
+
+.eb-board table {
+  min-width: 2800px;
+}
+
+.eb-board .fin-summary table {
+  min-width: 950px;
+}
+
+@media (max-width: 650px) {
+  .fin-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fin-cards strong {
+    font-size: 18px;
+  }
+}
+
+.fin-paid {
+  color: #fff;
+  background: #c9364f;
+  border: 0;
+  border-radius: 4px;
+  min-width: 110px;
+  padding: 8px;
+}
+
+.fin-paid.yes {
+  background: #00865d;
+}
+
+.fin-paid.unknown {
+  background: #676879;
+}
+
+/*# sourceMappingURL=components_finance_css_1igg3k2._.single.css.map*/

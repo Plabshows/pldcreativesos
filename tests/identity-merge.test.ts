@@ -1,0 +1,38 @@
+import {it,expect} from 'vitest';
+import {PGlite} from '@electric-sql/pglite';
+import {readFileSync} from 'node:fs';
+it('merges relationships before archiving and rolls back fiscal conflicts without losing money',async()=>{
+ const db=new PGlite(),org='11111111-1111-4111-8111-111111111111',other='11111111-1111-4111-8111-111111111112',main='22222222-2222-4222-8222-222222222222',dup='33333333-3333-4333-8333-333333333333',ev='44444444-4444-4444-8444-444444444444';
+ try{await db.exec(`create role authenticated;create table organizations(id uuid primary key);insert into organizations values('${org}'),('${other}');
+ create function has_org_role(uuid,text[]) returns boolean language sql as 'select $1=''${org}''::uuid';
+ create function enforce_tenant_references() returns trigger language plpgsql as 'begin return new;end';
+ create table talent(id uuid primary key,organization_id uuid,real_name text,talent_code text,stage_name text,email text,phone text,notes text,skills text[],deleted_at timestamptz,created_at timestamptz default now(),updated_at timestamptz default now());
+ create table suppliers(id uuid primary key,organization_id uuid,name text,normalized_name text,talent_id uuid,aliases text[] default '{}',tax_id text default '',iban text default '',notes text);
+ create table events(id uuid primary key,organization_id uuid);
+ create table event_talent(organization_id uuid,event_id uuid,talent_id uuid,agreed_cost_cents bigint default 0,notes text,primary key(event_id,talent_id));
+ create table expenses(id uuid primary key,organization_id uuid,event_id uuid,talent_id uuid,supplier_id uuid,total_cents bigint,status text);
+ create table payments(id uuid primary key,organization_id uuid,talent_id uuid,amount_cents bigint);
+ create table tasks(id uuid primary key,organization_id uuid,talent_id uuid);
+ create table bank_movements(id uuid primary key,organization_id uuid,talent_id uuid,supplier_id uuid,amount_cents bigint);
+ insert into talent(id,organization_id,real_name,email,notes,skills) values('${main}','${org}','Julieta Carolina','one@example.es','Texto principal','{Danza}'),('${dup}','${org}','Julieta Carbonell','two@example.es','Texto anterior','{Mimo}');
+ insert into events values('${ev}','${org}');insert into event_talent values('${org}','${ev}','${dup}',15000,'Trabajo original');
+ insert into expenses values(gen_random_uuid(),'${org}','${ev}','${dup}',null,15000,'pending');
+ insert into payments values(gen_random_uuid(),'${org}','${dup}',5000);
+ insert into bank_movements values(gen_random_uuid(),'${org}','${dup}',null,5000);insert into tasks values(gen_random_uuid(),'${org}','${dup}');`);
+ await db.exec(readFileSync('supabase/migrations/202609140024_identity_consolidation.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/202609140025_identity_relation_guards.sql','utf8'));
+ await db.query('select merge_identity($1,$2,$3,$4)',[main,dup,'talent','Manuel confirmó que son la misma persona']);
+ const people=(await db.query<{id:string;merged_into:string;aliases:string[];notes:string}>('select * from talent')).rows;
+ expect(people.find(p=>p.id===dup)?.merged_into).toBe(main);expect(people.find(p=>p.id===main)?.aliases).toContain('Julieta Carbonell');expect(people.find(p=>p.id===main)?.notes).toContain('Texto anterior');
+ for(const t of ['event_talent','expenses','payments','bank_movements','tasks'])expect((await db.query(`select * from ${t} where talent_id=$1`,[dup])).rows).toHaveLength(0);
+ expect((await db.query<{total:number}>('select sum(total_cents)::int as total from expenses')).rows[0].total).toBe(15000);
+ const sources=(await db.query<{identity_sources:{relationships:{table:string;rows:{talent_id:string}[]}[]}[]}>('select identity_sources from talent where id=$1',[main])).rows[0].identity_sources;
+ expect(sources[0].relationships.find(r=>r.table==='event_talent')?.rows[0].talent_id).toBe(dup);
+ await expect(db.query('insert into tasks values(gen_random_uuid(),$1,$2)',[org,dup])).rejects.toThrow(/fusionada/);
+ await expect(db.query('update talent set deleted_at=null where id=$1',[dup])).rejects.toThrow(/archivada/);
+ const third='55555555-5555-4555-8555-555555555555';await db.query("insert into talent(id,organization_id,real_name,tax_id) values($1,$2,'Otra','Y1234567X')",[third,org]);await db.query("update talent set tax_id='Z1234567X' where id=$1",[main]);
+ await expect(db.query('select merge_identity($1,$2,$3,$4)',[main,third,'talent','Confirmación manual pendiente'])).rejects.toThrow(/fiscales son distintos/);
+ expect((await db.query('select merged_into from talent where id=$1',[third])).rows[0]).toMatchObject({merged_into:null});
+ const foreign='66666666-6666-4666-8666-666666666666';await db.query("insert into talent(id,organization_id,real_name) values($1,$2,'Fuera')",[foreign,other]);await expect(db.query('select merge_identity($1,$2,$3,$4)',[main,foreign,'talent','No debe mezclar organizaciones'])).rejects.toThrow(/acceso/);
+ }finally{await db.close()}
+});

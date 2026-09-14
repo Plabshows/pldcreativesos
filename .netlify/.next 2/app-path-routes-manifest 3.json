@@ -1,0 +1,13 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/api/client-board/route": "/api/client-board",
+  "/api/clients/route": "/api/clients",
+  "/api/event-board/route": "/api/event-board",
+  "/api/events/route": "/api/events",
+  "/api/health/route": "/api/health",
+  "/api/tasks/route": "/api/tasks",
+  "/auth/page": "/auth",
+  "/page": "/",
+  "/setup/page": "/setup"
+}

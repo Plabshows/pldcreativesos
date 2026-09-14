@@ -6,3 +6,8 @@ node_modules/
 coverage/
 *.tsbuildinfo
 .DS_Store
+
+.next-local/
+
+# Local PDF quality checks (not CRM records)
+/tmp/pdfs/

@@ -3,6 +3,9 @@ import { z } from 'zod';
 import { requireOrganization } from '@/lib/server/auth';
 
 const fields = z.object({
+ strategic_importance:z.number().int().min(1).max(5).nullable().optional(),ease_of_work:z.number().int().min(1).max(5).nullable().optional(),
+ tax_id:z.string().max(200).optional(),billing_address:z.string().max(1000).optional(),postal_code:z.string().max(100).optional(),province:z.string().max(200).optional(),country:z.string().max(200).optional(),
+ billing_email:z.string().max(500).optional(),accounts_phone:z.string().max(200).optional(),accounts_contact:z.string().max(500).optional(),preferred_currency:z.string().regex(/^[A-Z]{3}$/).optional(),payment_terms:z.string().max(500).optional(),po_required:z.boolean().nullable().optional(),po_process:z.string().max(2000).optional(),billing_portal:z.union([z.literal(''),z.string().url().refine(v=>/^https?:\/\//.test(v))]).optional(),billing_notes:z.string().max(10000).optional(),
  company_name: z.string().trim().min(1).max(200).optional(),
  contact_name: z.string().max(500).optional(), phone: z.string().max(200).optional(),
  email: z.string().max(500).optional(), client_type: z.string().max(120).optional(),

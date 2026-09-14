@@ -1,0 +1,117 @@
+/* [project]/components/event-board.css [app-client] (css) */
+.eb-board table {
+  min-width: 1500px;
+}
+
+.eb-link {
+  color: #006bc7;
+  text-overflow: ellipsis;
+  background: #ecf5ff;
+  border: 0;
+  border-radius: 4px;
+  max-width: 100%;
+  padding: 7px;
+  display: block;
+  overflow: hidden;
+}
+
+.eb-relations {
+  flex-wrap: wrap;
+  gap: 8px;
+  display: flex;
+}
+
+.eb-relations span {
+  background: #ecf5ff;
+  border-radius: 5px;
+  padding: 7px;
+}
+
+.eb-relations span button {
+  background: none;
+  border: 0;
+  margin-left: 8px;
+}
+
+.eb-relations select, .cb-drawer label select, .cb-modal select {
+  color: #323338;
+  background: #fff;
+  border: 1px solid #dce1e8;
+  border-radius: 6px;
+  width: 100%;
+  padding: 10px;
+}
+
+.cb-drawer textarea {
+  border: 1px solid #dce1e8;
+  border-radius: 6px;
+  width: 100%;
+  min-height: 140px;
+  margin-top: 6px;
+  padding: 10px;
+  display: block;
+}
+
+.eb-month {
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0 20px;
+  display: flex;
+}
+
+.eb-month input {
+  border: 1px solid #dce1e8;
+  border-radius: 6px;
+  padding: 9px;
+}
+
+.eb-calendar {
+  background: #dce1e8;
+  border: 1px solid #dce1e8;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  display: grid;
+}
+
+.eb-calendar section {
+  background: #fff;
+  min-height: 140px;
+  padding: 8px;
+}
+
+.eb-calendar section > b {
+  color: #676879;
+  font-size: 12px;
+}
+
+.eb-calendar button {
+  text-align: left;
+  color: #323338;
+  background: #eaf4ff;
+  border: 0;
+  border-left: 3px solid #0073ea;
+  border-radius: 4px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+  display: block;
+}
+
+.eb-calendar strong, .eb-calendar small {
+  overflow-wrap: anywhere;
+  display: block;
+}
+
+.eb-calendar small {
+  color: #676879;
+  margin-top: 5px;
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .eb-calendar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/*# sourceMappingURL=components_event-board_css_1igg3k2._.single.css.map*/

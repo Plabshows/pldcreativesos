@@ -24,7 +24,12 @@ export default function AuthPage() {
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       if (signInError) throw signInError;
       stage = 'Preparación del espacio';
-      const { data: organizationId, error: bootstrapError } = await supabase.rpc('bootstrap_performance_lab');
+      // Solo el correo fundador debe ejecutar el bootstrap; los colaboradores
+      // ya vinculados entran directamente en la organización existente.
+      const isFounder = normalise(email) === 'plabcreativesos@gmail.com';
+      const { data: organizationId, error: bootstrapError } = isFounder
+        ? await supabase.rpc('bootstrap_performance_lab')
+        : { data: null, error: null };
       if (bootstrapError && !bootstrapError.message.includes('ya existe')) throw bootstrapError;
       const { data: membership } = organizationId ? { data: organizationId } : await supabase.from('organization_members').select('organization_id').limit(1).single();
       if (!membership) throw new Error('No se pudo encontrar el espacio de trabajo.');
