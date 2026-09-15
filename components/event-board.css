@@ -2,3 +2,8 @@
 
 .eb-quick-create{display:grid;gap:8px;padding:12px;margin:8px 0;background:#f5f2ff;border:1px solid #d9cff8;border-radius:10px;min-width:220px;white-space:normal}
 .eb-quick-create small{color:#656078}.eb-quick-create button{padding:8px;border:1px solid #d9cff8;border-radius:6px;background:white}.eb-quick-create p{color:#b42318}
+
+.eb-billing-cell{display:inline-flex;align-items:center;gap:6px;width:100%}
+.eb-billing-type{width:auto!important;min-width:80px;padding:5px 6px!important;font-size:12px!important;font-weight:600;border-radius:5px!important;border:1px solid #d1d5db!important;background:#fff!important;color:#374151!important}
+.eb-billing-type.cash{background:#ecfdf5!important;color:#065f46!important;border-color:#a7f3d0!important}
+.eb-cash-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:700;background:linear-gradient(135deg,#ecfdf5,#d1fae5);color:#065f46;border:1px solid #6ee7b7;white-space:nowrap;letter-spacing:0.02em}
