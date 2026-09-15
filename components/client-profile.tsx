@@ -19,8 +19,47 @@ export function ClientProfile({client,data,metrics,currency,disabled,save}:{clie
     <p style={{margin:'4px 0 0',fontSize:'13px'}}>{client.notes || 'Comprobar validez fiscal del documento asignado.'}</p>
    </div>
   )}
-  <div className="inv-summary">{[['score','Client Score'],['level','Nivel'],['jobs','Trabajos'],['revenue','Ventas registradas'],['invoiced','Total facturado'],['profit','Beneficio estimado'],['margin','Margen'],['paid','Cobrado'],['pending','Pendiente'],['ticket','Ticket medio'],['averageDays','Pago medio'],['last','Último evento'],['next','Próximo evento']].map(([key,label])=><div key={key}><small>{label}</small><strong>{metricText(key,metrics,currency)}</strong></div>)}</div>
-  {metrics&&<><p>Cliente desde {date(metrics.first)} · Primera factura {invoices.length?date(invoices.map(i=>i.issue_date).sort()[0]):'—'} · Último pago {date(metrics.lastPayment)}</p>{metrics.overdueCount>0&&<p className="cb-error">{metrics.overdueCount} facturas vencidas · {invoiceMoney(metrics.overdue,currency)}</p>}{metrics.paymentScore===null?<p>Payment Score: datos insuficientes ({metrics.paymentSamples}/3 facturas pagadas o vencidas).</p>:<p>Payment Score: {metrics.paymentScore.toFixed(0)}/100 · Retraso medio {metrics.averageLate?.toFixed(1)} días.</p>}{metrics.profit===null&&<p>Beneficio y margen pendientes: faltan gastos confirmados o su asignación a eventos.</p>}<details><summary>Cómo se calcula la puntuación</summary><p>25% valor económico · 20% trabajos · 20% comportamiento de pago · 20% importancia · 15% facilidad. Valor y trabajos se comparan con clientes que tienen trabajos. El score necesita ambas valoraciones y al menos tres facturas pagadas o vencidas.</p><p>Las ventas usan el precio de los eventos y las facturas sin evento; una factura vinculada no se suma otra vez al precio del evento. Los cobros y la deuda proceden únicamente de facturas. Borradores y canceladas quedan excluidos. Los precios de Eventos están en EUR.</p><p>Valor económico: {metrics.economic}/100 · Trabajos: {metrics.jobsScore}/100 · Importancia: {client.strategic_importance?client.strategic_importance*20:'Sin valorar'} · Facilidad: {client.ease_of_work?client.ease_of_work*20:'Sin valorar'}</p></details></>}
+  <div className="inv-summary">{[['score','Client Score'],['level','Nivel'],['jobs','Trabajos'],['revenue','Ventas por Trabajos'],['invoiced','Total Facturado'],['profit','Beneficio estimado'],['margin','Margen'],['paid','Cobrado'],['pending','Pendiente'],['ticket','Ticket medio'],['averageDays','Pago medio'],['last','Último evento'],['next','Próximo evento']].map(([key,label])=><div key={key}><small>{label}</small><strong>{metricText(key,metrics,currency)}</strong></div>)}</div>
+
+  {metrics && (
+   <div style={{background:'#f8fafc',border:'1px solid #cbd5e1',borderRadius:'10px',padding:'14px',margin:'14px 0'}}>
+    <h4 style={{margin:'0 0 10px',fontSize:'14px',fontWeight:700,color:'#0f172a',display:'flex',alignItems:'center',gap:'8px'}}>
+     ⚖️ COMPARACIÓN: TRABAJOS VS FACTURACIÓN
+    </h4>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))',gap:'12px'}}>
+     <div>
+      <small style={{display:'block',color:'#64748b',fontSize:'12px',fontWeight:500}}>Importe de Trabajos / Eventos</small>
+      <strong style={{fontSize:'16px',color:'#0f172a'}}>{invoiceMoney(metrics.eventsRevenue || 0, currency)}</strong>
+     </div>
+     <div>
+      <small style={{display:'block',color:'#64748b',fontSize:'12px',fontWeight:500}}>Importe Total Facturado</small>
+      <strong style={{fontSize:'16px',color:'#2563eb'}}>{invoiceMoney(metrics.invoiced || 0, currency)}</strong>
+     </div>
+     <div>
+      <small style={{display:'block',color:'#64748b',fontSize:'12px',fontWeight:500}}>Diferencia de Reconciliación</small>
+      <strong style={{fontSize:'16px',color: metrics.reconciliationDiff === 0 ? '#16a34a' : metrics.reconciliationDiff > 0 ? '#d97706' : '#2563eb'}}>
+       {metrics.reconciliationDiff === 0 
+        ? '✓ Coincidencia exacta' 
+        : metrics.reconciliationDiff > 0 
+          ? `+${invoiceMoney(metrics.reconciliationDiff, currency)} por facturar` 
+          : `${invoiceMoney(metrics.reconciliationDiff, currency)} mayor en facturas`}
+      </strong>
+     </div>
+     <div>
+      <small style={{display:'block',color:'#64748b',fontSize:'12px',fontWeight:500}}>Estado de Coincidencia</small>
+      <span style={{
+       display:'inline-block',marginTop:'3px',padding:'4px 10px',borderRadius:'12px',fontSize:'12px',fontWeight:600,
+       background: metrics.reconciliationDiff === 0 ? '#dcfce7' : metrics.reconciliationDiff > 0 ? '#fef3c7' : '#e0f2fe',
+       color: metrics.reconciliationDiff === 0 ? '#15803d' : metrics.reconciliationDiff > 0 ? '#b45309' : '#0369a1'
+      }}>
+       {metrics.reconciliationDiff === 0 ? '🟢 Cuentas cuadradas' : metrics.reconciliationDiff > 0 ? '🟡 Trabajos pendientes de facturar' : '🔵 Facturación superior a trabajos'}
+      </span>
+     </div>
+    </div>
+   </div>
+  )}
+
+  {metrics&&<><p>Cliente desde {date(metrics.first)} · Primera factura {invoices.length?date(invoices.map(i=>i.issue_date).sort()[0]):'—'} · Último pago {date(metrics.lastPayment)}</p>{metrics.overdueCount>0&&<p className="cb-error">{metrics.overdueCount} facturas vencidas · {invoiceMoney(metrics.overdue,currency)}</p>}{metrics.paymentScore===null?<p>Payment Score: datos insuficientes ({metrics.paymentSamples}/3 facturas pagadas o vencidas).</p>:<p>Payment Score: {metrics.paymentScore.toFixed(0)}/100 · Retraso medio {metrics.averageLate?.toFixed(1)} días.</p>}{metrics.profit===null&&<p>Beneficio y margen pendientes: faltan gastos confirmados o su asignación a eventos.</p>}<details><summary>Cómo se calcula la puntuación</summary><p>25% valor económico · 20% trabajos · 20% comportamiento de pago · 20% importancia · 15% facilidad. Las ventas representan el importe real de los trabajos contratados (o facturas si no hay eventos). Las facturas no se suman de forma duplicada sobre los trabajos.</p><p>Valor económico: {metrics.economic}/100 · Trabajos: {metrics.jobsScore}/100 · Importancia: {client.strategic_importance?client.strategic_importance*20:'Sin valorar'} · Facilidad: {client.ease_of_work?client.ease_of_work*20:'Sin valorar'}</p></details></>}
 
   <h3>🏢 Información de la Empresa</h3>
   <div className="crm-form-grid">
