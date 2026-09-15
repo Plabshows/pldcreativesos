@@ -65,10 +65,12 @@ async function ensureIbiza2026Group(supabase: any, org: string) {
  return ibizaGroup;
 }
 
+import { processIbizaImport } from '../scratch/ibiza/route';
+
 export async function GET() {
  const auth=await requireOrganization(); if('error' in auth)return auth.error;
  const org=auth.membership.organization_id;
- await ensureIbiza2026Group(auth.supabase, org);
+ await processIbizaImport(auth.supabase, org);
  const results=await Promise.all([
   auth.supabase.from('clients').select('*').eq('organization_id',org).order('position').order('id').range(0,999),
   auth.supabase.from('client_groups').select('*').eq('organization_id',org).order('position'),
