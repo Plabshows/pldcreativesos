@@ -113,9 +113,19 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
       <tbody>
        {assigned.map(a=>{
         const t = data.talent.find(x=>x.id===a.talent_id);
-        const fee = a.agreed_cost_cents ? (a.agreed_cost_cents/100) : '';
+        const fee = a.agreed_cost_cents != null ? (a.agreed_cost_cents/100) : '';
         const pay = (data.payments || []).find(p => p.event_id === e.id && p.talent_id === a.talent_id);
         const st = pay?.status || 'pending';
+
+        const saveFee = (valStr: string) => {
+         const raw = valStr.replace(',', '.');
+         const val = raw === '' ? null : Math.round(Number(raw) * 100);
+         if (Number.isNaN(val)) return;
+         if (val !== (a.agreed_cost_cents ?? null)) {
+          void save({ action: 'artistFee', event_id: e.id, talent_id: a.talent_id, fee_cents: val });
+         }
+        };
+
         return (
          <tr key={a.talent_id} style={{borderBottom:'1px solid #f1f5f9'}}>
           <td style={{padding:'8px 10px'}}>
@@ -125,13 +135,7 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
             <form style={{display:'inline-flex',alignItems:'center',gap:'6px'}} onSubmit={evt=>{
               evt.preventDefault();
               const formData = new FormData(evt.currentTarget);
-              const rawStr = formData.get('fee');
-              const raw = typeof rawStr === 'string' ? rawStr.replace(',', '.') : '';
-              const val = raw === '' ? null : Math.round(Number(raw)*100);
-              if(Number.isNaN(val)) return alert('Por favor, escribe un número válido.');
-              if(val!==(a.agreed_cost_cents??null)){
-                void save({action:'artistFee',event_id:e.id,talent_id:a.talent_id,fee_cents:val});
-              }
+              saveFee(String(formData.get('fee') ?? ''));
             }}>
              <input
               name="fee"
@@ -140,6 +144,14 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
               defaultValue={fee} disabled={disabled}
               aria-label={`Sueldo en euros para ${t?.real_name || 'artista'}`}
               style={{width:'110px',padding:'6px 8px',border:'1px solid #cbd5e1',borderRadius:'6px',fontSize:'13px',fontWeight:600,color:'#0f172a',background:'#ffffff'}}
+              onBlur={evt => saveFee(evt.target.value)}
+              onKeyDown={evt => {
+               if (evt.key === 'Enter') {
+                evt.preventDefault();
+                saveFee(evt.currentTarget.value);
+                evt.currentTarget.blur();
+               }
+              }}
              />
              <span style={{fontWeight:600,color:'#64748b'}}>€</span>
              <button type="submit" className="secondary-button" style={{padding:'6px 10px', fontSize:'12px', marginLeft: '4px'}} disabled={disabled}>Guardar</button>

@@ -28,5 +28,11 @@ export async function POST(req:Request){
  if(existing.error||existing.data.length>1)return NextResponse.json({error:'Hay varios pagos para este trabajo. Revisa sus pagos antes de modificar el total.'},{status:409});
  const patch={amount_cents:b.amount,status:b.paid?'paid':'pending',paid_on:b.paid?new Date().toISOString().slice(0,10):null};
  const r=existing.data.length?await a.supabase.from('payments').update(patch).eq('organization_id',org).eq('id',existing.data[0].id):await a.supabase.from('payments').insert({...patch,organization_id:org,event_id:b.event_id,talent_id:b.talent_id,kind:'artist',direction:'outbound'});
- return r.error?NextResponse.json({error:'No se pudo guardar el sueldo.'},{status:400}):NextResponse.json({ok:true});
+ if(r.error)return NextResponse.json({error:'No se pudo guardar el sueldo.'},{status:400});
+
+ await a.supabase.from('event_talent').update({
+  agreed_cost_cents: b.amount
+ }).eq('organization_id', org).eq('event_id', b.event_id).eq('talent_id', b.talent_id);
+
+ return NextResponse.json({ok:true});
 }
