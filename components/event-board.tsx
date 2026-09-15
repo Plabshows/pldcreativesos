@@ -12,13 +12,14 @@ import {FinanceSummary} from './finance-summary';
 import {eventMoney,euros,type MoneyEvent} from '@/lib/event-money';
 import {importedVenues} from '@/app/imported-venues';
 type Event=MoneyEvent & {billing_type:'invoice'|'cash';invoice_number:string|null;id:string;event_code:string;event_name:string;event_date:string|null;client_id:string|null;city:string|null;venue:string|null;status:string;internal_notes:string|null;wardrobe_notes:string|null;requested_entertainment:string|null;board_position:number;deleted_at:string|null};
-type Data={groups:{id:string;name:string}[];places:{kind:string;name:string}[];events:Event[];clients:{id:string;company_name:string}[];talent:{id:string;real_name:string;deleted_at?:string|null}[];shows:{id:string;name:string}[];assignments:{event_id:string;talent_id:string;agreed_cost_cents?:number|null;status?:string|null}[];showLinks:{event_id:string;show_id:string}[];suppliers?:{id:string;name:string}[];expenses?:{id:string;event_id:string|null;supplier_id?:string|null;supplier_name?:string;talent_id?:string|null;total_cents?:number|null;amount_cents?:number|null;status?:string;payment_status?:string;concept?:string;description?:string}[];canEdit:boolean};
+type Data={groups:{id:string;name:string}[];places:{kind:string;name:string}[];events:Event[];clients:{id:string;company_name:string}[];talent:{id:string;real_name:string;deleted_at?:string|null}[];shows:{id:string;name:string}[];assignments:{event_id:string;talent_id:string;agreed_cost_cents?:number|null;status?:string|null}[];showLinks:{event_id:string;show_id:string}[];suppliers?:{id:string;name:string}[];expenses?:{id:string;event_id:string|null;supplier_id?:string|null;supplier_name?:string;talent_id?:string|null;total_cents?:number|null;amount_cents?:number|null;status?:string;payment_status?:string;concept?:string;description?:string}[];payments?:{id:string;event_id:string;talent_id:string;status:string;amount_cents:number}[];canEdit:boolean};
 const labels:Record<string,string>={lead:'Contacto',proposal:'Propuesta',confirmed:'Confirmado',production:'Pendiente / En preparación',completed:'Completado',cancelled:'Cancelado'};
 const todayInSpain=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Madrid',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const groupOf=(e:Event,today:string)=>e.status==='cancelled'?'Cancelados':e.status==='completed'||(e.event_date&&e.event_date<today)?'Completados':'En preparación';
 const groups=['En preparación','Completados','Cancelados'];
 const groupStatus:Record<string,string>={'Confirmado':'confirmed','En preparación':'production','Completado':'completed','Cancelado':'cancelled'};
-const empty:Data={groups:[],places:[],events:[],clients:[],talent:[],shows:[],assignments:[],showLinks:[],suppliers:[],expenses:[],canEdit:false};
+const empty:Data={groups:[],places:[],events:[],clients:[],talent:[],shows:[],assignments:[],showLinks:[],suppliers:[],expenses:[],payments:[],canEdit:false};
+
 function Edit({value,type='text',disabled,label,save}:{value:string|null;type?:string;disabled:boolean;label:string;save:(v:string)=>void}){return <input key={value||''} type={type} aria-label={label} defaultValue={value||''} disabled={disabled} onBlur={e=>{if(e.target.value!==(value||''))save(e.target.value)}} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();if(e.key==='Escape'){e.stopPropagation();e.currentTarget.value=value||'';e.currentTarget.blur()}}}/>}
 function calcEventCompleteness(e:Event,data:Data){
  const hasClient=Boolean(e.client_id),hasDate=Boolean(e.event_date),hasVenueOrCity=Boolean(e.venue||e.city),hasStatus=Boolean(e.status),hasShows=data.showLinks.some(a=>a.event_id===e.id)||Boolean(e.requested_entertainment),hasArtists=data.assignments.some(a=>a.event_id===e.id)||Boolean(e.internal_notes?.includes('[Sin artistas o alquiler]')),hasPrice=(e.income_cents??0)>0,hasCosts=(e.expenses_cents??0)>0||(e.other_expenses_cents??0)>0,hasInvoice=e.billing_type==='cash'||Boolean(e.invoice_number),hasPaid=e.client_paid===true;
@@ -68,7 +69,7 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
  const columns=['SALUD','Fecha del evento','CLIENTES','SHOWS','ARTISTS & PROVIDERS','Localización / Venue',...financeColumns,'Ciudad','Estado'];
  const amountInput=(e:Event,key:'income_cents'|'expenses_cents'|'other_expenses_cents',label:string)=><input key={String(e[key])} type="number" min="0" max="1000000000" step="0.01" aria-label={label+' de '+e.event_name} defaultValue={e[key]===null?'':(e[key]??0)/100} disabled={disabled} onBlur={v=>{if(!v.target.validity.valid){v.target.reportValidity();return;}const cents=v.target.value===''?null:Math.round(Number(v.target.value)*100);if(cents!==e[key])void update([e.id],{[key]:cents})}}/>;
  const financeCell=(e:Event,c:string)=>{const m=eventMoney(e);switch(c){case 'INGRESO TOTAL':return amountInput(e,'income_cents',c);case 'GASTOS':return amountInput(e,'expenses_cents',c);case 'OTROS GASTOS':return amountInput(e,'other_expenses_cents',c);case 'COSTE TOTAL':return euros(m.cost);case 'BENEFICIO BRUTO':return euros(m.profit);case 'MARGEN %':return m.margin===null?'—':m.margin.toFixed(1)+' %';case 'PAGADO':return <button title="Cobro del cliente" className={'fin-paid '+(e.client_paid===true?'yes':e.client_paid===null?'unknown':'')} disabled={disabled} onClick={()=>void update([e.id],{client_paid:e.client_paid!==true})}>{e.client_paid===true?'Pagado':e.client_paid===false?'No pagado':'Sin confirmar'}</button>;case 'Nº FACTURA':return <span className="eb-billing-cell"><select title="Tipo de cobro" className={'eb-billing-type '+(e.billing_type==='cash'?'cash':'')} disabled={disabled} value={e.billing_type||'invoice'} onChange={ev=>{const next=ev.target.value as 'invoice'|'cash';if(next==='cash'&&e.invoice_number&&e.invoice_number.trim()){if(!window.confirm('Este evento tiene nº de factura «'+e.invoice_number+'». ¿Cambiar a Cash? El número se conservará como referencia.'))return;}void update([e.id],{billing_type:next})}}><option value="invoice">Factura</option><option value="cash">Cash</option></select>{e.billing_type==='cash'?<span className="eb-cash-badge">💵 CASH</span>:<Edit label={'Factura de '+e.event_name} value={e.invoice_number} disabled={disabled} save={v=>void update([e.id],{invoice_number:v})}/>}</span>;}};
- const relationPicker=(e:Event,kind:'talent'|'shows')=>{const options=kind==='talent'?data.talent.map(t=>({id:t.id,name:t.real_name})):data.shows;const linked=kind==='talent'?data.assignments.filter(a=>a.event_id===e.id).map(a=>a.talent_id):data.showLinks.filter(a=>a.event_id===e.id).map(a=>a.show_id);const isNoArtists=kind==='talent'&&e.internal_notes?.includes('[Sin artistas o alquiler]');return <div className="eb-relations">{isNoArtists&&<span style={{background:'#fde68a'}}>🚫 Sin artistas o alquiler<button disabled={disabled} aria-label="Quitar sin artistas" onClick={()=>void update([e.id],{internal_notes:e.internal_notes?.replace('[Sin artistas o alquiler]','').trim()})}>×</button></span>}{options.filter(o=>linked.includes(o.id)).map(o=><span key={o.id}>{o.name}<button disabled={disabled} aria-label={'Desvincular '+o.name} onClick={()=>kind==='talent'?void removeArtistWithCheck(e.id,o.id):void save({action:'relation',event_id:e.id,kind,target:o.id,remove:true})}>×</button></span>)}<CreatableEventSelect kind={kind} label={kind==='talent'?'+ Añadir artista':'+ Añadir show'} value="" disabled={disabled} options={[...(kind==='talent'&&!isNoArtists?[{value:'no-artists',label:'🚫 Sin artistas o alquiler'}]:[]),...options.filter(o=>!linked.includes(o.id)&&(kind!=='talent'||!data.talent.find(t=>t.id===o.id)?.deleted_at)).map(o=>({value:o.id,label:o.name}))]} onCreated={load} onChange={target=>{if(target==='no-artists'){void update([e.id],{internal_notes:((e.internal_notes||'')+' [Sin artistas o alquiler]').trim()})}else if(target){void save({action:'relation',event_id:e.id,kind,target,remove:false})}}}/></div>};
+ const relationPicker=(e:Event,kind:'talent'|'shows')=>{const options=kind==='talent'?data.talent.map(t=>({id:t.id,name:t.real_name})):data.shows;const linked=kind==='talent'?data.assignments.filter(a=>a.event_id===e.id).map(a=>a.talent_id):data.showLinks.filter(a=>a.event_id===e.id).map(a=>a.show_id);const isNoArtists=kind==='talent'&&e.internal_notes?.includes('[Sin artistas o alquiler]');return <div className="eb-relations">{isNoArtists&&<span style={{background:'#fde68a'}}>🚫 Sin artistas o alquiler<button disabled={disabled} aria-label="Quitar sin artistas" onClick={()=>void update([e.id],{internal_notes:e.internal_notes?.replace('[Sin artistas o alquiler]','').trim()})}>×</button></span>}{options.filter(o=>linked.includes(o.id)).map(o=><span key={o.id}>{o.name}<button disabled={disabled} aria-label={'Desvincular '+o.name} onClick={()=>kind==='talent'?void removeArtistWithCheck(e.id,o.id):void save({action:'relation',event_id:e.id,kind,target:o.id,remove:true})}>×</button></span>)}<div style={{width:'100%',display:'flex',flexDirection:'column',gap:'8px'}}><CreatableEventSelect kind={kind} label={kind==='talent'?'+ Añadir artista':'+ Añadir show'} value="" disabled={disabled} options={[...(kind==='talent'&&!isNoArtists?[{value:'no-artists',label:'🚫 Sin artistas o alquiler'}]:[]),...options.filter(o=>!linked.includes(o.id)&&(kind!=='talent'||!data.talent.find(t=>t.id===o.id)?.deleted_at)).map(o=>({value:o.id,label:o.name}))]} onCreated={load} onChange={target=>{if(target==='no-artists'){void update([e.id],{internal_notes:((e.internal_notes||'')+' [Sin artistas o alquiler]').trim()})}else if(target){void save({action:'relation',event_id:e.id,kind,target,remove:false})}}}/></div></div>};
  const cityNames=Array.from(new Set([...data.places.filter(p=>p.kind==='city').map(p=>p.name),...data.events.map(e=>e.city).filter((v):v is string=>Boolean(v))])).sort((a,b)=>a.localeCompare(b,'es'));
 
  const venueNames=Array.from(new Map([...data.places.filter(p=>p.kind==='venue').map(p=>p.name),...importedVenues.map(v=>v.name),...data.events.map(e=>e.venue).filter((v):v is string=>Boolean(v))].map(v=>[v.trim().toLocaleLowerCase('es'),v])).values()).sort((a,b)=>a.localeCompare(b,'es'));
@@ -113,37 +114,44 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
        {assigned.map(a=>{
         const t = data.talent.find(x=>x.id===a.talent_id);
         const fee = a.agreed_cost_cents ? (a.agreed_cost_cents/100) : '';
-        const st = a.status || 'pending';
+        const pay = (data.payments || []).find(p => p.event_id === e.id && p.talent_id === a.talent_id);
+        const st = pay?.status || 'pending';
         return (
          <tr key={a.talent_id} style={{borderBottom:'1px solid #f1f5f9'}}>
           <td style={{padding:'8px 10px'}}>
            <b style={{color:'#0f172a'}}>{t?.real_name || 'Artista'}</b>
           </td>
-          <td style={{padding:'8px 10px'}}>
-           <div style={{display:'inline-flex',alignItems:'center',gap:'6px'}}>
-            <input
-             key={`${a.talent_id}-${a.agreed_cost_cents ?? 'none'}`}
-             type="number" min="0" step="0.01" placeholder="Ej: 250.00"
-             defaultValue={fee} disabled={disabled}
-             aria-label={`Sueldo en euros para ${t?.real_name || 'artista'}`}
-             style={{width:'110px',padding:'6px 8px',border:'1px solid #cbd5e1',borderRadius:'6px',fontSize:'13px',fontWeight:600,color:'#0f172a',background:'#ffffff'}}
-             onKeyDown={evt=>{if(evt.key==='Enter') evt.currentTarget.blur();}}
-             onBlur={evt=>{
-              const val = evt.target.value===''?null:Math.round(Number(evt.target.value)*100);
+           <td style={{padding:'8px 10px'}}>
+            <form style={{display:'inline-flex',alignItems:'center',gap:'6px'}} onSubmit={evt=>{
+              evt.preventDefault();
+              const formData = new FormData(evt.currentTarget);
+              const rawStr = formData.get('fee');
+              const raw = typeof rawStr === 'string' ? rawStr.replace(',', '.') : '';
+              const val = raw === '' ? null : Math.round(Number(raw)*100);
+              if(Number.isNaN(val)) return alert('Por favor, escribe un número válido.');
               if(val!==(a.agreed_cost_cents??null)){
-               void save({action:'artistFee',event_id:e.id,talent_id:a.talent_id,fee_cents:val,status:st});
+                void save({action:'artistFee',event_id:e.id,talent_id:a.talent_id,fee_cents:val});
               }
-             }}
-            />
-            <span style={{fontWeight:600,color:'#64748b'}}>€</span>
-           </div>
-          </td>
+            }}>
+             <input
+              name="fee"
+              key={`${a.talent_id}-${a.agreed_cost_cents ?? 'none'}`}
+              type="number" min="0" step="0.01" placeholder="Ej: 250.00"
+              defaultValue={fee} disabled={disabled}
+              aria-label={`Sueldo en euros para ${t?.real_name || 'artista'}`}
+              style={{width:'110px',padding:'6px 8px',border:'1px solid #cbd5e1',borderRadius:'6px',fontSize:'13px',fontWeight:600,color:'#0f172a',background:'#ffffff'}}
+             />
+             <span style={{fontWeight:600,color:'#64748b'}}>€</span>
+             <button type="submit" className="secondary-button" style={{padding:'6px 10px', fontSize:'12px', marginLeft: '4px'}} disabled={disabled}>Guardar</button>
+            </form>
+           </td>
           <td style={{padding:'8px 10px'}}>
            <select
             value={st} disabled={disabled}
             style={{padding:'6px 8px',border:'1px solid #cbd5e1',borderRadius:'6px',fontSize:'12px',fontWeight:500,color:st==='paid'?'#15803d':'#b45309',background:st==='paid'?'#f0fdf4':'#fffbeb'}}
             onChange={evt=>{
-             void save({action:'artistFee',event_id:e.id,talent_id:a.talent_id,fee_cents:a.agreed_cost_cents??null,status:evt.target.value});
+             const currentFee = a.agreed_cost_cents == null ? null : Number(a.agreed_cost_cents);
+             void save({action:'artistFee',event_id:e.id,talent_id:a.talent_id,fee_cents:currentFee,status:evt.target.value});
             }}
            >
             <option value="pending">⏳ Pendiente</option>
@@ -323,7 +331,7 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
             {!hidden.includes("Fecha del evento") && <td><Edit type="date" label={'Fecha de ' + e.event_name} value={e.event_date} disabled={disabled} save={v => void update([e.id], { event_date: v || null })} /></td>}
             {!hidden.includes("CLIENTES") && <td>{clientSelect(e)}</td>}
             {!hidden.includes("SHOWS") && <td><button className="eb-link" onClick={() => setDrawer(e.id)}>{names(e, 'shows') || e.requested_entertainment || '+ Vincular shows'}</button></td>}
-            {!hidden.includes("ARTISTS & PROVIDERS") && <td><button className="eb-link" onClick={() => setDrawer(e.id)}>{names(e, 'talent') || '+ Vincular artistas y sueldos'}</button></td>}
+            {!hidden.includes("ARTISTS & PROVIDERS") && <td><button className="eb-link" onClick={() => setDrawer(e.id)}>{e.internal_notes?.includes('[Sin artistas o alquiler]') ? '🚫 Sin artistas / Alquiler' : (names(e, 'talent') || '+ Vincular artistas y sueldos')}</button></td>}
             {!hidden.includes("Localización / Venue") && <td>{venueSelect(e)}</td>}
             {financeColumns.filter(c => !hidden.includes(c)).map(c => <td key={c}>{financeCell(e, c)}</td>)}
             {!hidden.includes("Ciudad") && <td>{citySelect(e)}</td>}

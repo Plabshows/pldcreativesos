@@ -29,51 +29,52 @@ async function syncEventExpensesTotal(supabase: any, org: string, eventId: strin
 
 export async function GET(){
  const a=await requireOrganization();if('error'in a)return a.error;const org=a.membership.organization_id;
- const queries=[
-  a.supabase.from('events').select('*').eq('organization_id',org).order('event_date',{ascending:false,nullsFirst:false}).range(0,999),
-  a.supabase.from('clients').select('id,company_name,group_id').eq('organization_id',org).is('deleted_at',null).order('company_name').range(0,999),
-  a.supabase.from('talent').select('id,real_name,city,email,phone,notes,skills,deleted_at,aliases,tax_id,iban,billing_supplier_id,billing_confidence,identity_sources,merged_into').eq('organization_id',org).order('real_name').range(0,999),
-  a.supabase.from('shows').select('id,name').eq('organization_id',org).eq('active',true).order('name').range(0,999),
-  a.supabase.from('event_talent').select('*').eq('organization_id',org).range(0,999),
-  a.supabase.from('event_shows').select('*').eq('organization_id',org).range(0,999),
-  a.supabase.from('client_groups').select('id,name').eq('organization_id',org).order('position'),
-  a.supabase.from('event_places').select('kind,name').eq('organization_id',org).order('name').range(0,999),
-  a.supabase.from('suppliers').select('id,name').eq('organization_id',org).is('deleted_at',null).order('name').range(0,999),
-  a.supabase.from('expenses').select('id,event_id,supplier_name,talent_id,total_cents,status,concept').eq('organization_id',org).not('event_id','is',null).range(0,999)
- ];
- const r=await Promise.all(queries);
- const err=r.find(x=>x.error)?.error;
- if(err){
-  console.error('[api/event-board GET Error]:', err);
-  return NextResponse.json({error:'No se pudo cargar el tablero de eventos: '+err.message},{status:500});
+  const queries=[
+   a.supabase.from('events').select('*').eq('organization_id',org).order('event_date',{ascending:false,nullsFirst:false}).range(0,999),
+   a.supabase.from('clients').select('id,company_name,group_id').eq('organization_id',org).is('deleted_at',null).order('company_name').range(0,999),
+   a.supabase.from('talent').select('id,real_name,city,email,phone,notes,skills,deleted_at,aliases,tax_id,iban,billing_supplier_id,billing_confidence,identity_sources,merged_into').eq('organization_id',org).order('real_name').range(0,999),
+   a.supabase.from('shows').select('id,name').eq('organization_id',org).eq('active',true).order('name').range(0,999),
+   a.supabase.from('event_talent').select('*').eq('organization_id',org).range(0,999),
+   a.supabase.from('event_shows').select('*').eq('organization_id',org).range(0,999),
+   a.supabase.from('client_groups').select('id,name').eq('organization_id',org).order('position'),
+   a.supabase.from('event_places').select('kind,name').eq('organization_id',org).order('name').range(0,999),
+   a.supabase.from('suppliers').select('id,name').eq('organization_id',org).is('deleted_at',null).order('name').range(0,999),
+   a.supabase.from('expenses').select('id,event_id,supplier_name,talent_id,total_cents,status,concept').eq('organization_id',org).not('event_id','is',null).range(0,999),
+   a.supabase.from('payments').select('id,event_id,talent_id,status,amount_cents').eq('organization_id',org).eq('kind','artist').range(0,999)
+  ];
+  const r=await Promise.all(queries);
+  const err=r.find(x=>x.error)?.error;
+  if(err){
+   console.error('[api/event-board GET Error]:', err);
+   return NextResponse.json({error:'No se pudo cargar el tablero de eventos: '+err.message},{status:500});
+  }
+  return NextResponse.json({
+   groups:r[6].data,places:r[7].data,events:r[0].data,clients:r[1].data,talent:r[2].data,shows:r[3].data,assignments:r[4].data,showLinks:r[5].data,suppliers:r[8].data,expenses:r[9].data,payments:r[10].data,canEdit:['admin','producer'].includes(a.membership.role)
+  });
  }
- return NextResponse.json({
-  groups:r[6].data,places:r[7].data,events:r[0].data,clients:r[1].data,talent:r[2].data,shows:r[3].data,assignments:r[4].data,showLinks:r[5].data,suppliers:r[8].data,expenses:r[9].data,canEdit:['admin','producer'].includes(a.membership.role)
- });
-}
 
 export async function POST(req:Request){
  const a=await requireOrganization();if('error'in a)return a.error;if(!['admin','producer'].includes(a.membership.role))return NextResponse.json({error:'Tu perfil no permite editar eventos.'},{status:403});
- const p=schema.safeParse(await req.json().catch(()=>null));if(!p.success)return NextResponse.json({error:'Revisa los campos y la fecha.'},{status:400});const b=p.data,org=a.membership.organization_id;let r;
+ const p=schema.safeParse(await req.json().catch(()=>null));if(!p.success) {
+  console.error('[API Zod Error]', p.error);
+  return NextResponse.json({error:'Revisa los campos y la fecha: ' + p.error.message},{status:400});
+ }
+ const b=p.data,org=a.membership.organization_id;let r;
  if(b.action==='artistFee'){
   const fee = b.fee_cents ?? 0;
-  const status = b.status || 'pending';
   // 1. Update event_talent
-  const et = await a.supabase.from('event_talent').upsert({
-   organization_id: org,
-   event_id: b.event_id,
-   talent_id: b.talent_id,
-   agreed_cost_cents: fee,
-   status: status
-  }, { onConflict: 'event_id,talent_id' });
+  const et = await a.supabase.from('event_talent').update({
+   agreed_cost_cents: fee
+  }).eq('organization_id', org).eq('event_id', b.event_id).eq('talent_id', b.talent_id);
   if(et.error) return NextResponse.json({error:'No se pudo guardar el fee del artista.'},{status:400});
 
   // 2. Sync to payments table (Single Source of Truth)
-  const existingPay = await a.supabase.from('payments').select('id,status').eq('organization_id',org).eq('event_id',b.event_id).eq('talent_id',b.talent_id).eq('kind','artist').eq('direction','outbound').maybeSingle();
+  const existingPay = await a.supabase.from('payments').select('id,status,paid_on').eq('organization_id',org).eq('event_id',b.event_id).eq('talent_id',b.talent_id).eq('kind','artist').eq('direction','outbound').maybeSingle();
+  const status = b.status ?? (existingPay.data?.status || 'pending');
   const payPatch = {
    amount_cents: fee,
    status: status,
-   paid_on: status === 'paid' ? new Date().toISOString().slice(0, 10) : null
+   paid_on: status === 'paid' ? (existingPay.data?.paid_on || new Date().toISOString().slice(0, 10)) : null
   };
   if (existingPay.data) {
    await a.supabase.from('payments').update(payPatch).eq('id', existingPay.data.id);
@@ -88,10 +89,19 @@ export async function POST(req:Request){
    });
   }
 
+  // 3. Sync to expenses table if one exists
+  await a.supabase.from('expenses').update({
+    total_cents: fee
+  }).eq('organization_id', org).eq('event_id', b.event_id).eq('talent_id', b.talent_id);
+
+  // 4. Recalculate event expenses_cents total
+  await syncEventExpensesTotal(a.supabase, org, b.event_id);
+
   return NextResponse.json({ok:true});
  } else if (b.action === 'providerExpense') {
   if (b.remove && b.expense_id) {
    await a.supabase.from('expenses').delete().eq('organization_id', org).eq('id', b.expense_id);
+   await syncEventExpensesTotal(a.supabase, org, b.event_id);
    return NextResponse.json({ok:true});
   }
 
@@ -126,6 +136,7 @@ export async function POST(req:Request){
    await a.supabase.from('expenses').insert(expData);
   }
 
+  await syncEventExpensesTotal(a.supabase, org, b.event_id);
   return NextResponse.json({ok:true});
  } else if(b.action==='relation'){
   const ev=await a.supabase.from('events').select('id').eq('organization_id',org).eq('id',b.event_id).is('deleted_at',null).maybeSingle();
@@ -154,8 +165,12 @@ export async function POST(req:Request){
     // Also remove unpaid pending payments
     await a.supabase.from('payments').delete().eq('organization_id', org).eq('event_id', b.event_id).eq('talent_id', b.target).eq('kind', 'artist').neq('status', 'paid');
    }
+   await syncEventExpensesTotal(a.supabase, org, b.event_id);
   } else {
    r=b.remove?await a.supabase.from(table).delete().eq('organization_id',org).eq('event_id',b.event_id).eq(key,b.target):await a.supabase.from(table).upsert({organization_id:org,event_id:b.event_id,[key]:b.target},{onConflict:'event_id,'+key,ignoreDuplicates:true});
+   if (b.kind === 'talent') {
+    await syncEventExpensesTotal(a.supabase, org, b.event_id);
+   }
   }
  }else if(b.action==='createTalent'){
   const match=await artistBeforeCreate(a.supabase,org,b.real_name);
@@ -176,4 +191,3 @@ export async function POST(req:Request){
  }
  return r.error?NextResponse.json({error:'No se pudo guardar. El cambio no se ha aplicado.'},{status:400}):NextResponse.json({ok:true});
 }
-
