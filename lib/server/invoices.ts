@@ -1,0 +1,10 @@
+import type {SupabaseClient} from '@supabase/supabase-js';
+import {invoiceBalance,type Invoice,type InvoicePayment} from '@/lib/invoices';
+export async function invoiceRows(db:SupabaseClient,org:string,table:string){const rows:Record<string,unknown>[]=[];for(let offset=0;;offset+=500){const r=await db.from(table).select('*').eq('organization_id',org).order('id').range(offset,offset+499);if(r.error)throw r.error;rows.push(...r.data);if(r.data.length<500)return rows}}
+export const getInvoices=(db:SupabaseClient,org:string)=>invoiceRows(db,org,'invoices');
+export async function getClientInvoices(db:SupabaseClient,org:string,id:string){return (await getInvoices(db,org)).filter(i=>i.client_id===id)}
+export async function getInvoicePayments(db:SupabaseClient,org:string,id:string){return (await invoiceRows(db,org,'invoice_payments')).filter(p=>p.invoice_id===id)}
+export async function getInvoiceFollowups(db:SupabaseClient,org:string,id:string){return (await invoiceRows(db,org,'invoice_followups')).filter(f=>f.invoice_id===id)}
+export async function getOverdueInvoices(db:SupabaseClient,org:string){const [i,p]=await Promise.all([getInvoices(db,org),invoiceRows(db,org,'invoice_payments')]);return i.filter(i=>invoiceBalance(i as unknown as Invoice,p as unknown as InvoicePayment[]).status==='overdue')}
+export async function addInvoicePayment(db:SupabaseClient,org:string,user:string,fields:Record<string,unknown>){const r=await db.from('invoice_payments').insert({...fields,organization_id:org,created_by:user});if(r.error)throw r.error}
+export async function addInvoiceFollowup(db:SupabaseClient,org:string,user:string,fields:Record<string,unknown>){const r=await db.from('invoice_followups').insert({...fields,organization_id:org,created_by:user});if(r.error)throw r.error}

@@ -1,0 +1,9 @@
+export const normalizeTalent=(text:string)=>text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+const rules:[string,RegExp][]=[
+ ['Acrobacia',/acroba|acrobatic/],['Aéreos',/aere[oa]|aerial/],['Telas aéreas',/aerial silks|telas/],['Aro aéreo',/aerial hoop|aro aereo/],
+ ['Danza',/bail|danc|danza|break|poppin|contempor|heels|hip.?hop|samba/],['Breakdance',/break/],['Danza contemporánea',/contemp/],['Danza urbana',/urban|hip.?hop|poppin/],['Popping',/poppin/],['Pole dance',/pole/],['Heels',/heels/],['Samba',/samba/],['Ballet',/ballet/],['Jazz',/jazz/],['Claqué',/tap dance|claque/],['Go-go',/go\s?go/],
+ ['Patinaje',/roller|skating|skate|patin/],['Zancos',/zanc|stilts/],['Mimo',/\bmimo\b|\bmime\b/],['Interpretación',/actor|actriz|attore/],['Performance',/perform|perfomance/],['Canto',/cantante|singer/],['Percusión',/percusion|percussion/],['DJ',/\bdj\b/],['Modelaje',/\bmodel/],['Tarot',/tarot|pitonisa/],['Drag',/\bdrag\b/],['Presentación',/hosting|presentador/],['Fuego',/fuego|\bfire\b/],['LED',/\bleds?\b/],['Sirena',/mermaid|sirena/],['Rueda Cyr',/cyr/],['Vestuario',/vestuarista|creacion de vestuario|arreglos.*vestuario/],['Striptease',/streap|strip/]
+];
+export const talentSkillOptions=rules.map(([label])=>label).sort((a,b)=>a.localeCompare(b,'es'));
+export function talentCategories(notes:string|null,skills?:string[]|null){if(skills!=null)return skills;const text=normalizeTalent(notes||'');return rules.filter(([,pattern])=>pattern.test(text)).map(([label])=>label);}
+export function talentCities(city:string|null){return [...new Set((city||'').split(/[,/;]+/).map(c=>c.trim()).filter(Boolean).map(c=>{const n=normalizeTalent(c);if(n==='bcn'||n==='barcelona')return 'Barcelona';if(n.includes('mallorca'))return 'Mallorca';return ({ibiza:'Ibiza',eivissa:'Ibiza',dubai:'Dubai',london:'Londres',londres:'Londres',madrid:'Madrid',valencia:'Valencia'} as Record<string,string>)[n]||c;}))];}

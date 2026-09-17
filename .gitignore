@@ -1,0 +1,26 @@
+node_modules/
+.next/
+.env*
+!.env.example
+.vercel/
+coverage/
+*.tsbuildinfo
+.DS_Store
+
+.next-local/
+
+# Local PDF quality checks (not CRM records)
+/tmp/pdfs/
+.vercel
+/scratch/
+/eventos_performance_lab_os.xlsx
+/public/eventos_performance_lab_os.xlsx
+
+.netlify/
+.next-stale*
+supabase/.temp/
+/app/imported-events.ts
+/app/imported-data-fixed.ts
+/app/imported-expenses.ts
+scratch_*
+

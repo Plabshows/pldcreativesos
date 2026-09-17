@@ -1,0 +1,12 @@
+import type {SupabaseClient} from '@supabase/supabase-js';
+import {invoiceRows} from './invoices';
+import {expenseBalance,type Expense,type ExpensePayment} from '@/lib/expenses';
+export const getExpenses=(db:SupabaseClient,org:string)=>invoiceRows(db,org,'expenses');
+export async function getExpensePayments(db:SupabaseClient,org:string){const [expenses,payments,legacy]=await Promise.all([getExpenses(db,org),invoiceRows(db,org,'expense_payments'),invoiceRows(db,org,'payments')]);return [...payments,...expenses.flatMap(e=>{const p=legacy.find(p=>p.id===e.legacy_payment_id&&p.status==='paid');return p?[{...p,expense_id:e.id,currency:'EUR',payment_date:p.paid_on}]:[]})]}
+export async function getUnpaidExpenses(db:SupabaseClient,org:string){const [e,p]=await Promise.all([getExpenses(db,org),getExpensePayments(db,org)]);return e.filter(e=>e.status!=='cancelled'&&(expenseBalance(e as unknown as Expense,p as unknown as ExpensePayment[]).pending??1)>0)}
+export async function getMissingSupplierInvoices(db:SupabaseClient,org:string){return (await getExpenses(db,org)).filter(e=>e.status==='missing')}
+export async function getArtistExpenses(db:SupabaseClient,org:string,id:string){return (await getExpenses(db,org)).filter(e=>e.talent_id===id)}
+export async function getEventExpenses(db:SupabaseClient,org:string,id:string){return (await getExpenses(db,org)).filter(e=>e.event_id===id)}
+export async function getEventProfitability(db:SupabaseClient,org:string,id:string){const {data:event,error}=await db.from('events').select('income_cents').eq('organization_id',org).eq('id',id).single();if(error)throw error;const expenses=(await getEventExpenses(db,org,id)).filter(e=>e.status!=='cancelled'&&!e.covered_by_expense_id);return {saleEUR:event.income_cents,expenses,complete:expenses.every(e=>e.total_cents!==null),costByCurrency:expenses.reduce<Record<string,number>>((t,e)=>{const currency=String(e.currency);t[currency]=(t[currency]||0)+Number(e.total_cents||0);return t},{} as Record<string,number>)}}
+export async function addExpensePayment(db:SupabaseClient,org:string,user:string,fields:Record<string,unknown>){const r=await db.from('expense_payments').insert({...fields,organization_id:org,created_by:user});if(r.error)throw r.error}
+export async function addExpenseFollowup(db:SupabaseClient,org:string,user:string,fields:Record<string,unknown>){const r=await db.from('expense_followups').insert({...fields,organization_id:org,created_by:user});if(r.error)throw r.error}
