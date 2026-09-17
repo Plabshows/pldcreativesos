@@ -6,11 +6,12 @@ export const metadata: Metadata = {
   description: 'El centro operativo de Performance Lab',
   icons: {
     icon: [
-      { url: '/icon.png', type: 'image/png' },
-      { url: '/logo.png', type: 'image/png' }
+      { url: '/favicon-32x32.png?v=2', sizes: '32x32', type: 'image/png' },
+      { url: '/icon.png?v=2', sizes: '48x48', type: 'image/png' },
+      { url: '/logo.png?v=2', type: 'image/png' }
     ],
-    shortcut: '/icon.png',
-    apple: '/apple-icon.png',
+    shortcut: '/favicon-32x32.png?v=2',
+    apple: '/apple-touch-icon.png?v=2',
   },
 };
 
@@ -18,8 +19,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="es">
       <head>
-        <link rel="icon" href="/icon.png" type="image/png" sizes="any" />
-        <link rel="apple-touch-icon" href="/apple-icon.png" />
+        <link rel="icon" href="/favicon-32x32.png?v=2" sizes="32x32" type="image/png" />
+        <link rel="icon" href="/icon.png?v=2" sizes="48x48" type="image/png" />
+        <link rel="shortcut icon" href="/favicon-32x32.png?v=2" type="image/png" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2" sizes="180x180" />
       </head>
       <body>{children}</body>
     </html>
