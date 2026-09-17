@@ -10,7 +10,7 @@ const fields = z.object({
  contact_name: z.string().max(500).optional(), phone: z.string().max(200).optional(),
  email: z.string().max(500).optional(), client_type: z.string().max(120).optional(),
  city: z.string().max(200).optional(), company: z.string().max(500).optional(),
- fiscal_data: z.string().max(10000).optional(), notes: z.string().max(10000).optional(),
+ fiscal_data: z.string().max(10000).optional(), bank_details: z.string().max(10000).optional(), notes: z.string().max(10000).optional(),
  group_id: z.string().uuid().optional(), position: z.number().finite().optional(),
  deleted_at: z.string().datetime().nullable().optional(),
 }).strict();
@@ -21,56 +21,9 @@ const action = z.discriminatedUnion('action', [
  z.object({ action:z.literal('linkEvent'), event_id:z.string().uuid(), client_id:z.string().uuid() }),
 ]);
 
-async function ensureIbiza2026Group(supabase: any, org: string) {
- let { data: ibizaGroup } = await supabase
-  .from('client_groups')
-  .select('*')
-  .eq('organization_id', org)
-  .ilike('name', 'Ibiza 2026')
-  .maybeSingle();
-
- if (!ibizaGroup) {
-  const newG = await supabase
-   .from('client_groups')
-   .insert({
-    organization_id: org,
-    name: 'Ibiza 2026',
-    position: 0,
-    color: '#0073ea'
-   })
-   .select('*')
-   .single();
-
-  if (newG.data) {
-   ibizaGroup = newG.data;
-  }
- }
-
- if (ibizaGroup) {
-  const { data: clientsWithoutGroup } = await supabase
-   .from('clients')
-   .select('id, group_id')
-   .eq('organization_id', org)
-   .is('deleted_at', null);
-
-  const toUpdate = (clientsWithoutGroup || []).filter((c: any) => !c.group_id);
-  if (toUpdate.length > 0) {
-   await supabase
-    .from('clients')
-    .update({ group_id: ibizaGroup.id, updated_at: new Date().toISOString() })
-    .eq('organization_id', org)
-    .in('id', toUpdate.map((c: any) => c.id));
-  }
- }
- return ibizaGroup;
-}
-
-import { processIbizaImport } from '../scratch/ibiza/route';
-
 export async function GET() {
  const auth=await requireOrganization(); if('error' in auth)return auth.error;
  const org=auth.membership.organization_id;
- await processIbizaImport(auth.supabase, org);
  const results=await Promise.all([
   auth.supabase.from('clients').select('*').eq('organization_id',org).order('position').order('id').range(0,999),
   auth.supabase.from('client_groups').select('*').eq('organization_id',org).order('position'),

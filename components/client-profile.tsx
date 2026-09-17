@@ -3,10 +3,10 @@ import {buildClientInsights,invoiceSettlement,daysBetween,type InsightsData} fro
 import {invoiceBalance,invoiceMoney,invoiceStatuses} from '@/lib/invoices';
 export const clientMetricColumns=[['score','Client Score'],['level','Nivel'],['importance','Importancia'],['jobs','Trabajos'],['revenue','Ventas'],['pending','Pendiente'],['averageDays','Pago medio'],['ease','Facilidad'],['last','Último evento'],['next','Próximo evento'],['profit','Beneficio'],['margin','Margen'],['invoiced','Facturado'],['paid','Cobrado']] as const;
 export type ClientInsight=ReturnType<typeof buildClientInsights>[string];
-export type ClientProfileFields={strategic_importance:number|null;ease_of_work:number|null;tax_id:string;billing_address:string;postal_code:string;province:string;country:string;billing_email:string;accounts_phone:string;accounts_contact:string;preferred_currency:string;payment_terms:string;po_required:boolean|null;po_process:string;billing_portal:string;billing_notes:string};
+export type ClientProfileFields={strategic_importance:number|null;ease_of_work:number|null;tax_id:string;billing_address:string;postal_code:string;province:string;country:string;billing_email:string;accounts_phone:string;accounts_contact:string;preferred_currency:string;payment_terms:string;po_required:boolean|null;po_process:string;billing_portal:string;billing_notes:string;bank_details?:string|null};
 export function metricText(key:string,m:ClientInsight|undefined,currency:string){if(!m)return '—';const v=m[key as keyof ClientInsight];if(v===null||v===undefined||v==='')return key==='score'||key==='level'?'Sin datos':'—';if(['revenue','pending','profit','invoiced','paid','ticket','cost'].includes(key))return invoiceMoney(Number(v),currency);if(['averageDays','averageLate'].includes(key))return Number(v).toFixed(1)+' días';if(key==='margin')return Number(v).toFixed(1)+' %';return String(v)}
 const date=(v:string|null)=>v?new Date(v.slice(0,10)+'T12:00:00').toLocaleDateString('es-ES'):'—';
-export function ClientProfile({client,data,metrics,currency,disabled,save}:{client:ClientProfileFields&{id:string;company_name:string;company:string|null;city:string|null;fiscal_data:string|null;notes:string|null;contact_name?:string|null;phone?:string|null;email?:string|null;client_type?:string|null};data:InsightsData|undefined;metrics:ClientInsight|undefined;currency:string;disabled:boolean;save:(patch:Record<string,unknown>)=>Promise<unknown>}){
+export function ClientProfile({client,data,metrics,currency,disabled,save}:{client:ClientProfileFields&{id:string;company_name:string;company:string|null;city:string|null;fiscal_data:string|null;notes:string|null;contact_name?:string|null;phone?:string|null;email?:string|null;client_type?:string|null;bank_details?:string|null};data:InsightsData|undefined;metrics:ClientInsight|undefined;currency:string;disabled:boolean;save:(patch:Record<string,unknown>)=>Promise<unknown>}){
  const edit=(key:string,label:string,type='text')=><label key={key}>{label}<input key={String((client as unknown as Record<string,unknown>)[key])} type={type} defaultValue={String((client as unknown as Record<string,unknown>)[key]??'')} disabled={disabled} onBlur={e=>{const old=String((client as unknown as Record<string,unknown>)[key]??'');if(e.target.value!==old&&e.target.validity.valid)void save({[key]:e.target.value})}}/></label>;
  const invoices=data?.invoices.filter(i=>i.client_id===client.id&&i.currency===currency)||[],events=data?.events.filter(e=>e.client_id===client.id&&!e.deleted_at)||[];
  const hasVerificationFlag = (client.notes || '').includes('[NEEDS VERIFICATION]') || (client.tax_id || '').includes('NEEDS VERIFICATION') || (client.fiscal_data || '').includes('NEEDS VERIFICATION');
@@ -29,7 +29,7 @@ export function ClientProfile({client,data,metrics,currency,disabled,save}:{clie
     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))',gap:'12px'}}>
      <div>
       <small style={{display:'block',color:'#64748b',fontSize:'12px',fontWeight:500}}>Importe de Trabajos / Eventos</small>
-      <strong style={{fontSize:'16px',color:'#0f172a'}}>{invoiceMoney(metrics.eventsRevenue || 0, currency)}</strong>
+      <strong style={{fontSize:'16px',color:'#0f172a'}}>{metrics.eventsRevenue===null?'Por confirmar':invoiceMoney(metrics.eventsRevenue, currency)}</strong>
      </div>
      <div>
       <small style={{display:'block',color:'#64748b',fontSize:'12px',fontWeight:500}}>Importe Total Facturado</small>
@@ -37,8 +37,10 @@ export function ClientProfile({client,data,metrics,currency,disabled,save}:{clie
      </div>
      <div>
       <small style={{display:'block',color:'#64748b',fontSize:'12px',fontWeight:500}}>Diferencia de Reconciliación</small>
-      <strong style={{fontSize:'16px',color: metrics.reconciliationDiff === 0 ? '#16a34a' : metrics.reconciliationDiff > 0 ? '#d97706' : '#2563eb'}}>
-       {metrics.reconciliationDiff === 0 
+      <strong style={{fontSize:'16px',color: metrics.reconciliationDiff === null ? '#64748b' : metrics.reconciliationDiff === 0 ? '#16a34a' : metrics.reconciliationDiff > 0 ? '#d97706' : '#2563eb'}}>
+       {metrics.reconciliationDiff === null
+        ? 'Por confirmar'
+        : metrics.reconciliationDiff === 0
         ? '✓ Coincidencia exacta' 
         : metrics.reconciliationDiff > 0 
           ? `+${invoiceMoney(metrics.reconciliationDiff, currency)} por facturar` 
@@ -49,10 +51,10 @@ export function ClientProfile({client,data,metrics,currency,disabled,save}:{clie
       <small style={{display:'block',color:'#64748b',fontSize:'12px',fontWeight:500}}>Estado de Coincidencia</small>
       <span style={{
        display:'inline-block',marginTop:'3px',padding:'4px 10px',borderRadius:'12px',fontSize:'12px',fontWeight:600,
-       background: metrics.reconciliationDiff === 0 ? '#dcfce7' : metrics.reconciliationDiff > 0 ? '#fef3c7' : '#e0f2fe',
-       color: metrics.reconciliationDiff === 0 ? '#15803d' : metrics.reconciliationDiff > 0 ? '#b45309' : '#0369a1'
+       background: metrics.reconciliationDiff === null ? '#f1f5f9' : metrics.reconciliationDiff === 0 ? '#dcfce7' : metrics.reconciliationDiff > 0 ? '#fef3c7' : '#e0f2fe',
+       color: metrics.reconciliationDiff === null ? '#475569' : metrics.reconciliationDiff === 0 ? '#15803d' : metrics.reconciliationDiff > 0 ? '#b45309' : '#0369a1'
       }}>
-       {metrics.reconciliationDiff === 0 ? '🟢 Cuentas cuadradas' : metrics.reconciliationDiff > 0 ? '🟡 Trabajos pendientes de facturar' : '🔵 Facturación superior a trabajos'}
+       {metrics.reconciliationDiff === null ? '⚪ Datos de eventos pendientes' : metrics.reconciliationDiff === 0 ? '🟢 Cuentas cuadradas' : metrics.reconciliationDiff > 0 ? '🟡 Trabajos pendientes de facturar' : '🔵 Facturación superior a trabajos'}
       </span>
      </div>
     </div>
@@ -78,11 +80,12 @@ export function ClientProfile({client,data,metrics,currency,disabled,save}:{clie
    {edit('country','País')}
   </div>
 
-  <h3>📇 Información de Contacto</h3>
+  <h3>📇 Información de Contacto y Datos Bancarios</h3>
   <div className="crm-form-grid">
    {edit('contact_name','Persona de contacto')}
    {edit('phone','Teléfono principal')}
    {edit('email','Email principal','email')}
+   {edit('bank_details','Datos bancarios (IBAN / BIC / Cuenta)')}
    {edit('accounts_contact','Persona de administración')}
    {edit('accounts_phone','Teléfono de administración')}
    {edit('billing_email','Email de facturación','email')}
