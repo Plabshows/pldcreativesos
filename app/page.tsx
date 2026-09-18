@@ -49,9 +49,7 @@ function AccessGate({checking}:{checking:boolean}){return <main className="auth-
 function Dashboard({events,tasks,onEvents}:{events:EventCard[];tasks:{id:string;text:string;done:boolean}[];onEvents:()=>void}){return <><TaskInbox panel/><FinanceSummary/><div className="welcome-row"><div><p className="eyebrow">ESPACIO DE TRABAJO</p><h1>Buenos días <span>✦</span></h1><p className="subhead">Aquí tienes lo que necesita tu atención hoy.</p></div></div><div className="two-col"><section className="panel events-panel"><div className="panel-head"><div><h2>Últimos eventos</h2><p>Eventos reales enlazados, ordenados por fecha.</p></div><button className="text-button" onClick={onEvents}>Ver todos</button></div><div className="event-list">{events.map(event=><article className="event-row" key={event.id} role="button" tabIndex={0} onClick={onEvents}><div className="event-main"><div className="event-title-row"><h3>{event.title}</h3><span className={`status-pill ${event.status}`}>{event.status}</span></div><p>{event.client} · {event.date} · {event.city||'Sin ciudad'}</p><div className="event-meta"><span>⌖ {event.venue||'Venue pendiente'}</span><span className="artist-count"><Users size={13}/>{event.artists} artistas</span></div></div></article>)}{!events.length&&<p>No hay eventos registrados.</p>}</div></section><section className="panel tasks-panel"><div className="panel-head"><div><h2>Tareas del equipo</h2><p>{tasks.filter(t=>!t.done).length} abiertas</p></div></div><div className="task-list">{tasks.filter(t=>!t.done).slice(0,6).map(t=><div className="task-row" key={t.id}><span><b>{t.text}</b></span></div>)}{!tasks.some(t=>!t.done)&&<p>No hay tareas abiertas.</p>}</div></section></div><CrmSummary/></>}
 function TeamModule({onBack}:{onBack:()=>void}){
  const members = [
-  { name: 'Manuel Forner', role: 'Administrador / Dirección', email: 'plabcreativesos@gmail.com', color: 'purple', status: 'Activo' },
-  { name: 'Nacho', role: 'Productor / Ventas', email: 'Contacto de producción', color: 'mint', status: 'Activo' },
-  { name: 'Christelle', role: 'Ventas / Relaciones', email: 'Contacto comercial', color: 'amber', status: 'Activo' }
+  { name: 'Sara', role: 'Administradora / Dirección', email: 'admin@performancelab.es', color: 'purple', status: 'Activo' }
  ];
  return <div className="data-module">
   <div className="module-head">
@@ -80,7 +78,7 @@ function TeamModule({onBack}:{onBack:()=>void}){
   <section className="team-invite">
    <div>
     <b>Gestionar accesos del equipo</b>
-    <p>Las cuentas creadas en Supabase con roles asignados (Admin, Productor, Ventas) tienen acceso verificado a este espacio de trabajo.</p>
+    <p>Las cuentas verificadas en Supabase con roles asignados (Admin, Productor, Ventas) tienen acceso a este espacio de trabajo.</p>
    </div>
    <a className="secondary-button" href="/auth">Abrir acceso del equipo</a>
   </section>
