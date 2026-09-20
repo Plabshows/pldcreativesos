@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const auth = await requireOrganization(); if ('error' in auth) return auth.error;
-  const { data, error } = await auth.supabase.from('tasks').select('id,title,description,deadline,priority,status,event_id,client_id').is('deleted_at', null).neq('status', 'cancelled').order('deadline', { ascending: true, nullsFirst: false }).limit(100);
+  const { data, error } = await auth.supabase.from('tasks').select('id,title,description,deadline,priority,status,event_id,client_id').eq('organization_id', auth.membership.organization_id).is('deleted_at', null).neq('status', 'cancelled').order('deadline', { ascending: true, nullsFirst: false }).limit(100);
   if (error) return NextResponse.json({ error: 'No se pudieron cargar las tareas.' }, { status: 500 });
   return NextResponse.json({ data });
 }

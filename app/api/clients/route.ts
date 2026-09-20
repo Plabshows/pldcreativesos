@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   const auth = await requireOrganization(); if ('error' in auth) return auth.error;
   const query = new URL(request.url).searchParams.get('q')?.trim();
-  let builder = auth.supabase.from('clients').select('id,client_code,company_name,client_type,city,status,next_follow_up,last_contact').is('deleted_at', null).order('company_name').limit(100);
+  let builder = auth.supabase.from('clients').select('id,client_code,company_name,client_type,city,status,next_follow_up,last_contact').eq('organization_id', auth.membership.organization_id).is('deleted_at', null).order('company_name').limit(100);
   if (query) builder = builder.ilike('company_name', `%${query.replace(/[%_]/g, '')}%`);
   const { data, error } = await builder;
   if (error) return NextResponse.json({ error: 'No se pudieron cargar los clientes.' }, { status: 500 });

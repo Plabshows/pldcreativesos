@@ -12,7 +12,7 @@ import {FinanceSummary} from './finance-summary';
 import {eventMoney,euros,type MoneyEvent} from '@/lib/event-money';
 import {importedVenues} from '@/app/imported-venues';
 type Event=MoneyEvent & {billing_type:'invoice'|'cash';invoice_number:string|null;id:string;event_code:string;event_name:string;event_date:string|null;client_id:string|null;city:string|null;venue:string|null;status:string;internal_notes:string|null;wardrobe_notes:string|null;requested_entertainment:string|null;board_position:number;deleted_at:string|null};
-type Data={groups:{id:string;name:string}[];places:{kind:string;name:string}[];events:Event[];clients:{id:string;company_name:string}[];talent:{id:string;real_name:string;deleted_at?:string|null}[];shows:{id:string;name:string}[];assignments:{event_id:string;talent_id:string;agreed_cost_cents?:number|null;status?:string|null}[];showLinks:{event_id:string;show_id:string}[];suppliers?:{id:string;name:string}[];expenses?:{id:string;event_id:string|null;supplier_id?:string|null;supplier_name?:string;talent_id?:string|null;total_cents?:number|null;amount_cents?:number|null;status?:string;payment_status?:string;concept?:string;description?:string}[];payments?:{id:string;event_id:string;talent_id:string;status:string;amount_cents:number}[];canEdit:boolean};
+type Data={groups:{id:string;name:string}[];places:{kind:string;name:string}[];events:Event[];clients:{id:string;company_name:string}[];talent:{id:string;real_name:string;deleted_at?:string|null}[];shows:{id:string;name:string}[];assignments:{event_id:string;talent_id:string;agreed_cost_cents?:number|null;status?:string|null}[];showLinks:{event_id:string;show_id:string}[];suppliers?:{id:string;name:string}[];expenses?:{id:string;event_id:string|null;supplier_id?:string|null;supplier_name?:string;talent_id?:string|null;total_cents?:number|null;status?:string;concept?:string}[];payments?:{id:string;event_id:string;talent_id:string;status:string;amount_cents:number}[];canEdit:boolean};
 const labels:Record<string,string>={lead:'Contacto',proposal:'Propuesta',confirmed:'Confirmado',production:'Pendiente / En preparación',completed:'Completado',cancelled:'Cancelado'};
 const todayInSpain=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Madrid',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const groupOf=(e:Event,today:string)=>e.status==='cancelled'?'Cancelados':e.status==='completed'||(e.event_date&&e.event_date<today)?'Completados':'En preparación';
@@ -190,7 +190,7 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
 
  const renderProviderTable=(e:Event)=>{
   const eventExpenses = (data.expenses||[]).filter(x=>x.event_id===e.id);
-  const totalCents = eventExpenses.reduce((sum,x)=>sum+Number(x.amount_cents||0),0);
+  const totalCents = eventExpenses.reduce((sum,x)=>sum+Number(x.total_cents||0),0);
   return (
    <div className="eb-providers-table-wrap" style={{marginTop:'12px',background:'#f9fafb',padding:'12px',borderRadius:'8px',border:'1px solid #e5e7eb'}}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
@@ -203,15 +203,15 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
        <tr style={{borderBottom:'1px solid #e5e7eb',textAlign:'left',color:'#6b7280'}}>
         <th style={{padding:'6px 8px'}}>Proveedor / Descripción</th>
         <th style={{padding:'6px 8px'}}>Importe €</th>
-        <th style={{padding:'6px 8px'}}>Estado</th>
+        <th style={{padding:'6px 8px'}}>Control</th>
         <th style={{padding:'6px 8px',textAlign:'right'}}>Acción</th>
        </tr>
       </thead>
       <tbody>
        {eventExpenses.map(x=>{
         const supp = data.suppliers?.find(s=>s.id===x.supplier_id);
-        const name = supp?.name || x.description || 'Proveedor';
-        const amt = x.amount_cents ? (x.amount_cents/100) : '';
+        const name = supp?.name || x.supplier_name || x.concept || 'Proveedor';
+        const amt = x.total_cents===null ? '' : (x.total_cents||0)/100;
         return (
          <tr key={x.id} style={{borderBottom:'1px solid #f3f4f6'}}>
           <td style={{padding:'6px 8px'}}><b>{name}</b></td>
@@ -222,23 +222,14 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
             style={{width:'90px',padding:'4px 6px',border:'1px solid #d1d5db',borderRadius:'4px'}}
             onBlur={evt=>{
              const val = evt.target.value===''?null:Math.round(Number(evt.target.value)*100);
-             if(val!==x.amount_cents){
-              void save({action:'providerExpense',event_id:e.id,expense_id:x.id,amount_cents:val,payment_status:x.payment_status||'pending'});
+             if(val!==x.total_cents){
+              void save({action:'providerExpense',event_id:e.id,expense_id:x.id,amount_cents:val});
              }
             }}
            /> €
           </td>
           <td style={{padding:'6px 8px'}}>
-           <select
-            value={x.payment_status||'pending'} disabled={disabled}
-            style={{padding:'4px 6px',border:'1px solid #d1d5db',borderRadius:'4px'}}
-            onChange={evt=>{
-             void save({action:'providerExpense',event_id:e.id,expense_id:x.id,amount_cents:x.amount_cents,payment_status:evt.target.value});
-            }}
-           >
-            <option value="pending">Pendiente</option>
-            <option value="paid">Pagado</option>
-           </select>
+           <a href={'/?expense='+x.id+'#facturas'}>Abrir gasto</a>
           </td>
           <td style={{padding:'6px 8px',textAlign:'right'}}>
            <button
@@ -261,8 +252,9 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
       const name = window.prompt('Nombre del proveedor o servicio (ej: Fedriani, Transporte, Técnico)');
       if(!name?.trim()) return;
       const amountStr = window.prompt('Importe € (opcional)');
-      const amountCents = amountStr ? Math.round(Number(amountStr)*100) : 0;
-      void save({action:'providerExpense',event_id:e.id,supplier_name:name.trim(),amount_cents:amountCents,payment_status:'pending'});
+      const amountCents = amountStr?.trim() ? Math.round(Number(amountStr)*100) : null;
+      if(amountCents!==null&&!Number.isFinite(amountCents)){window.alert('Indica un importe válido.');return;}
+      void save({action:'providerExpense',event_id:e.id,supplier_name:name.trim(),amount_cents:amountCents});
      }}
     >
      + Añadir gasto de proveedor

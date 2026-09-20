@@ -19,20 +19,8 @@ export async function POST(req:Request){
  if(!['admin','producer'].includes(a.membership.role))return NextResponse.json({error:'No tienes permiso para editar pagos.'},{status:403});
  const parsed=schema.safeParse(await req.json().catch(()=>null));if(!parsed.success)return NextResponse.json({error:'Revisa el importe.'},{status:400});
  const b=parsed.data,org=a.membership.organization_id;
- const linked=await a.supabase.from('expenses').select('id').eq('organization_id',org).eq('talent_id',b.talent_id).eq('event_id',b.event_id).neq('status','cancelled').maybeSingle();
- if(linked.error)return NextResponse.json({error:'No se pudo comprobar el gasto.'},{status:500});
- if(linked.data)return NextResponse.json({error:'Este trabajo se gestiona en Facturación & Gastos para conservar pagos parciales y seguimiento.',expense_id:linked.data.id},{status:409});
- const assignment=await a.supabase.from('event_talent').select('event_id').eq('organization_id',org).eq('event_id',b.event_id).eq('talent_id',b.talent_id).maybeSingle();
- if(assignment.error||!assignment.data)return NextResponse.json({error:'Este artista no está asignado al evento.'},{status:400});
- const existing=await a.supabase.from('payments').select('id').eq('organization_id',org).eq('event_id',b.event_id).eq('talent_id',b.talent_id).eq('kind','artist').eq('direction','outbound');
- if(existing.error||existing.data.length>1)return NextResponse.json({error:'Hay varios pagos para este trabajo. Revisa sus pagos antes de modificar el total.'},{status:409});
- const patch={amount_cents:b.amount,status:b.paid?'paid':'pending',paid_on:b.paid?new Date().toISOString().slice(0,10):null};
- const r=existing.data.length?await a.supabase.from('payments').update(patch).eq('organization_id',org).eq('id',existing.data[0].id):await a.supabase.from('payments').insert({...patch,organization_id:org,event_id:b.event_id,talent_id:b.talent_id,kind:'artist',direction:'outbound'});
- if(r.error)return NextResponse.json({error:'No se pudo guardar el sueldo.'},{status:400});
-
- await a.supabase.from('event_talent').update({
-  agreed_cost_cents: b.amount
- }).eq('organization_id', org).eq('event_id', b.event_id).eq('talent_id', b.talent_id);
-
+ if(b.paid)return NextResponse.json({error:'Registra el pago en Facturación & Gastos con fecha e importe.'},{status:409});
+ const result=await a.supabase.rpc('set_artist_budget',{target_org:org,target_event:b.event_id,target_talent:b.talent_id,fee:b.amount});
+ if(result.error)return NextResponse.json({error:result.error.code==='P0001'?result.error.message:'No se pudo guardar el sueldo completo. Comprueba la actualización de Supabase.'},{status:409});
  return NextResponse.json({ok:true});
 }
