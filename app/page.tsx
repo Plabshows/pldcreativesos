@@ -3,6 +3,9 @@
 import {useEffect, useMemo, useState} from 'react';
 import {CalendarDays, Check, ChevronDown, CircleDollarSign, FileText, LayoutDashboard, Menu, Plus, Search, Settings, Sparkles, Target, UserRound, Users, Zap} from 'lucide-react';
 import {createClient} from '@/lib/supabase/client';
+import {WorkspacePicker} from '@/components/workspace-picker';
+import {SignOut} from '@/components/sign-out';
+import {TeamDirectory} from '@/components/team-directory';
 import {responseJson} from '@/lib/response-json';
 import {FinanceWorkspace} from '@/components/finance-workspace';
 import {TaskInbox} from '@/components/task-inbox';
@@ -23,6 +26,7 @@ const nav:[Section, typeof LayoutDashboard][]=[['Mi día',LayoutDashboard],['Cli
 
 export default function Home(){
   const [access,setAccess]=useState<'checking'|'allowed'|'denied'>('checking');
+  useEffect(()=>{try{const {data}=createClient().auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_OUT'||!session){setAccess('denied');setEvents([]);setShows([]);setTasks([]);}});return()=>data.subscription.unsubscribe();}catch{setAccess('denied');}},[]);
   const [active,setActiveState]=useState<Section>('Mi día');
   const [query,setQuery]=useState('');
   const [menuOpen,setMenuOpen]=useState(false);
@@ -46,7 +50,7 @@ export default function Home(){
   const createWorkspace=async()=>{const name=prompt('Nombre del nuevo espacio de trabajo');if(!name?.trim())return;const r=await fetch('/api/workspaces',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.trim()})}),d=await responseJson(r);if(!r.ok){alert(d.error||'No se pudo crear el espacio.');return;}location.assign('/');};
   const switchWorkspace=async(id:string)=>{const r=await fetch('/api/workspaces',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({workspaceId:id})});if(r.ok)location.assign('/');};
   const content=active==='Facturas'?<FinanceWorkspace query={query}/>:active==='Tareas'?<TasksWorkspace query={query}/>:active==='Propuestas'?<ProposalsWorkspace query={query}/>:active==='Leads'?<CrmWorkspace mode="leads" query={query}/>:active==='Pipeline'?<CrmWorkspace mode="opportunities" query={query}/>:active==='Clientes'?<ClientBoard query={query} onBack={()=>setActive('Mi día')}/>:active==='Talento'?<TalentDirectory query={query} onAdd={addArtist} onPayments={()=>setActive('Pagos')} onBack={()=>setActive('Mi día')}/>:active==='Pagos'?<ArtistProfiles query={query} onBack={()=>setActive('Mi día')}/>:active==='Eventos'?<EventBoard query={query} onBack={()=>setActive('Mi día')}/>:active==='Shows'?<ShowsModule shows={shows} query={query} onBack={()=>setActive('Mi día')} onAdd={addShow}/>:active==='Equipo'?<TeamModule onBack={()=>setActive('Mi día')}/>:null;
-  return <main className="app-shell"><aside className={`sidebar ${menuOpen?'open':''}`}><div className="brand"><img src="/logo.png" alt="Performance Lab" className="brand-logo-img" style={{width:36,height:36,objectFit:'contain'}}/><div><strong>PERFORMANCE</strong><span>LAB OS</span></div></div><div className="workspace-switcher"><img src="/logo.png" alt="Performance Lab" style={{width:28,height:28,objectFit:'contain'}}/><div><b>Performance Lab</b><small>Espacio de trabajo</small></div><ChevronDown size={15}/></div><nav className="main-nav"><p className="nav-label">Espacio de trabajo</p>{nav.map(([label,Icon])=><button key={label} className={`nav-item ${active===label?'active':''}`} onClick={()=>{setActive(label);setMenuOpen(false);}}><Icon size={18}/><span>{label==='Facturas'?'Facturación & Gastos':label}</span>{label==='Tareas'&&<em>{tasks.filter(t=>!t.done).length}</em>}</button>)}</nav><div className="sidebar-bottom"><a className="nav-item" href="/auth"><Settings size={18}/><span>Conectar equipo</span></a></div></aside><section className="content-area"><header className="topbar"><button className="mobile-menu" aria-label="Abrir menú" onClick={()=>setMenuOpen(v=>!v)}><Menu size={22}/></button><div className="crumb"><span>Performance Lab</span><b>/</b><strong>{active}</strong></div><div className="top-actions"><div className="search-wrap"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar en tu espacio..." aria-label="Buscar"/></div><button className="primary-button" onClick={()=>setQuick(true)}><Plus size={16}/> Añadir</button><TaskInbox/></div></header><div className="page-content">{active==='Mi día'?<Dashboard events={visibleEvents} tasks={tasks} onEvents={()=>setActive('Eventos')}/>:content}</div></section>{quick&&<div className="modal-backdrop" onMouseDown={()=>setQuick(false)}><div className="quick-modal" onMouseDown={e=>e.stopPropagation()}><div className="modal-head"><div><p className="eyebrow">ACCIÓN RÁPIDA</p><h2>¿Qué quieres añadir?</h2></div><button className="close-button" onClick={()=>setQuick(false)}>×</button></div><div className="quick-modal-grid"><button onClick={()=>{setActive('Clientes');setQuick(false);}}><Users size={19}/><b>Cliente</b><span>Guardar una nueva relación comercial</span></button><button onClick={()=>{void addArtist();setQuick(false);}}><Sparkles size={19}/><b>Artista</b><span>Crear una ficha de talento</span></button><button onClick={()=>{setActive('Eventos');setQuick(false);}}><CalendarDays size={19}/><b>Evento</b><span>Abrir el panel de producción</span></button><button onClick={()=>{void addShow();setQuick(false);}}><Zap size={19}/><b>Show</b><span>Crear un show o personaje interno</span></button></div></div></div>}</main>;
+  return <main className="app-shell"><aside className={`sidebar ${menuOpen?'open':''}`}><div className="brand"><img src="/logo.png" alt="Performance Lab" className="brand-logo-img" style={{width:36,height:36,objectFit:'contain'}}/><div><strong>PERFORMANCE</strong><span>LAB OS</span></div></div><WorkspacePicker/><nav className="main-nav"><p className="nav-label">Espacio de trabajo</p>{nav.map(([label,Icon])=><button key={label} className={`nav-item ${active===label?'active':''}`} onClick={()=>{setActive(label);setMenuOpen(false);}}><Icon size={18}/><span>{label==='Facturas'?'Facturación & Gastos':label}</span>{label==='Tareas'&&<em>{tasks.filter(t=>!t.done).length}</em>}</button>)}</nav><div className="sidebar-bottom"><SignOut/><a className="nav-item" href="/auth"><Settings size={18}/><span>Conectar equipo</span></a></div></aside><section className="content-area"><header className="topbar"><button className="mobile-menu" aria-label="Abrir menú" onClick={()=>setMenuOpen(v=>!v)}><Menu size={22}/></button><div className="crumb"><span>Performance Lab</span><b>/</b><strong>{active}</strong></div><div className="top-actions"><div className="search-wrap"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar en tu espacio..." aria-label="Buscar"/></div><button className="primary-button" onClick={()=>setQuick(true)}><Plus size={16}/> Añadir</button><TaskInbox/></div></header><div className="page-content">{active==='Mi día'?<Dashboard events={visibleEvents} tasks={tasks} onEvents={()=>setActive('Eventos')}/>:content}</div></section>{quick&&<div className="modal-backdrop" onMouseDown={()=>setQuick(false)}><div className="quick-modal" onMouseDown={e=>e.stopPropagation()}><div className="modal-head"><div><p className="eyebrow">ACCIÓN RÁPIDA</p><h2>¿Qué quieres añadir?</h2></div><button className="close-button" onClick={()=>setQuick(false)}>×</button></div><div className="quick-modal-grid"><button onClick={()=>{setActive('Clientes');setQuick(false);}}><Users size={19}/><b>Cliente</b><span>Guardar una nueva relación comercial</span></button><button onClick={()=>{void addArtist();setQuick(false);}}><Sparkles size={19}/><b>Artista</b><span>Crear una ficha de talento</span></button><button onClick={()=>{setActive('Eventos');setQuick(false);}}><CalendarDays size={19}/><b>Evento</b><span>Abrir el panel de producción</span></button><button onClick={()=>{void addShow();setQuick(false);}}><Zap size={19}/><b>Show</b><span>Crear un show o personaje interno</span></button></div></div></div>}</main>;
 
 }
 
@@ -55,9 +59,6 @@ function Dashboard({events,tasks,onEvents}:{events:EventCard[];tasks:{id:string;
 function TeamModule({onBack}:{onBack:()=>void}){
  const [creating,setCreating]=useState(false);
  const createWorkspace=async()=>{const name=prompt('Nombre del nuevo espacio de trabajo');if(!name?.trim())return;setCreating(true);try{const r=await fetch('/api/workspaces',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.trim()})}),d=await responseJson(r);if(!r.ok)throw Error(d.error||'No se pudo crear el espacio.');location.assign('/');}catch(error){alert(error instanceof Error?error.message:'No se pudo crear el espacio.');}finally{setCreating(false);}};
- const members = [
-  { name: 'Sara', role: 'Administradora / Dirección', email: 'admin@performancelab.es', color: 'purple', status: 'Activo' }
- ];
  return <div className="data-module">
   <div className="module-head">
    <div>
@@ -67,21 +68,7 @@ function TeamModule({onBack}:{onBack:()=>void}){
    </div>
    <button className="primary-button" onClick={onBack}>Volver a Mi día</button>
   </div>
-  <div className="team-grid">
-   {members.map(member => (
-    <article className="team-card" key={member.name}>
-     <div className={`avatar ${member.color}`}>
-      {member.name.slice(0, 1).toUpperCase()}
-     </div>
-     <div>
-      <h3>{member.name}</h3>
-      <p>{member.role}</p>
-      <small>{member.email}</small>
-     </div>
-     <span className="status-pill confirmado">{member.status}</span>
-    </article>
-   ))}
-  </div>
+  <TeamDirectory/>
   <section className="team-invite">
    <div>
     <b>Gestionar accesos del equipo</b>

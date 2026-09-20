@@ -140,21 +140,8 @@ export function InvoicesWorkspace({
   }
 
   async function handleMarkPaid(id: string) {
-    setMarkingId(id);
-    try {
-      const r = await fetch('/api/invoices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'mark_paid', id })
-      });
-      const d = await responseJson(r);
-      if (!r.ok) throw Error(d.error);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo marcar como pagada.');
-    } finally {
-      setMarkingId(null);
-    }
+    const invoice = data.invoices.find(invoice => invoice.id === id);
+    if (invoice) setEditing(invoice);
   }
 
   useEffect(() => {
@@ -382,7 +369,7 @@ export function InvoicesWorkspace({
                             onClick={() => void handleMarkPaid(i.id)}
                             title="Marcar rápidamente como pagada hoy"
                           >
-                            {markingId === i.id ? 'Guardando…' : '✓ Marcar pagada'}
+                            Registrar cobro
                           </button>
                         )}
                       </div>
@@ -576,13 +563,9 @@ function InvoiceEditor({
               type="button"
               className="quick-pay-button"
               disabled={busy}
-              onClick={async () => {
-                if (await send({ action: 'mark_paid', id })) {
-                  await onChanged();
-                }
-              }}
+              onClick={() => dialog.current?.querySelector<HTMLInputElement>('input[name="amount"]')?.focus()}
             >
-              ⚡ Marcar como pagada
+              Registrar cobro
             </button>
           )}
         </div>
@@ -791,7 +774,7 @@ function InvoiceEditor({
                 </label>
                 <label>
                   Método
-                  <input name="method" />
+                  <input name="method" required placeholder="Transferencia, efectivo…" />
                 </label>
                 <label>
                   Referencia bancaria

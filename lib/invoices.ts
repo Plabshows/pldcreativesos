@@ -13,7 +13,7 @@ export type InvoiceData={collectionSources?:CollectionEvidence[];invoices:Invoic
 export const invoiceToday=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Madrid'}).format(new Date());
 export function invoiceBalance(i:Invoice,p:InvoicePayment[],today=invoiceToday()){
  const received=p.filter(p=>p.invoice_id===i.id&&p.currency===i.currency).reduce((sum,p)=>sum+p.amount_cents,0),pending=i.total_cents-received;
- const status=i.status==='cancelled'?'cancelled':i.status==='draft'?'draft':pending<=0?'paid':i.status==='unverified'?'unverified':i.due_date&&i.due_date<today?'overdue':received>0?'partial':i.status;
+ const status=i.status==='cancelled'?'cancelled':i.status==='draft'?'draft':pending<=0?'paid':i.status==='unverified'||i.status==='paid'?'unverified':i.due_date&&i.due_date<today?'overdue':received>0?'partial':i.status;
  return {received,pending,status};
 }
 export function latestFollowup(i:Invoice,f:InvoiceFollowup[]){return f.filter(f=>f.invoice_id===i.id).sort((a,b)=>b.followup_date.localeCompare(a.followup_date)||b.created_at.localeCompare(a.created_at))[0]}
@@ -35,4 +35,3 @@ export function invoiceTotals(invoices:Invoice[],payments:InvoicePayment[]){
  },{total:0,received:0,pending:0,confirmedPending:0,unverifiedAmount:0,maxExposure:0,overdue:0,count:0});
 }
 export const invoiceMoney=(n:number,currency:string)=>new Intl.NumberFormat('es-ES',{style:'currency',currency}).format(n/100);
-

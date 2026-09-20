@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const auth = await requireOrganization(); if ('error' in auth) return auth.error;
-  const { data, error } = await auth.supabase.from('events').select('id,event_code,event_name,event_date,start_time,end_time,venue,city,event_type,status,health,client:clients(company_name)').is('deleted_at', null).order('event_date', { ascending: true }).limit(100);
+  const { data, error } = await auth.supabase.from('events').select('id,event_code,event_name,event_date,start_time,end_time,venue,city,event_type,status,health,client:clients(company_name)').eq('organization_id', auth.membership.organization_id).is('deleted_at', null).order('event_date', { ascending: true }).limit(100);
   if (error) return NextResponse.json({ error: 'No se pudieron cargar los eventos.' }, { status: 500 });
   return NextResponse.json({ data });
 }
