@@ -32,7 +32,10 @@ export async function GET(){
    a.supabase.from('event_places').select('kind,name').eq('organization_id',org).order('name').range(0,999),
    a.supabase.from('suppliers').select('id,name').eq('organization_id',org).is('deleted_at',null).order('name').range(0,999),
    a.supabase.from('expenses').select('id,event_id,supplier_id,supplier_name,talent_id,total_cents,status,concept').eq('organization_id',org).not('event_id','is',null).neq('status','cancelled').range(0,999),
-   a.supabase.from('payments').select('id,event_id,talent_id,status,amount_cents').eq('organization_id',org).eq('kind','artist').range(0,999)
+   a.supabase.from('payments').select('id,event_id,talent_id,status,amount_cents').eq('organization_id',org).eq('kind','artist').range(0,999),
+   a.supabase.from('inventory_concepts').select('id,name,total_units,category').eq('organization_id',org).order('name'),
+   a.supabase.from('inventory_items').select('id,concept_id,item_code,status').eq('organization_id',org),
+   a.supabase.from('inventory_event_allocations').select('*').eq('organization_id',org)
   ];
   const r=await Promise.all(queries);
   const err=r.find(x=>x.error)?.error;
@@ -41,7 +44,7 @@ export async function GET(){
    return NextResponse.json({error:'No se pudo cargar el tablero de eventos: '+err.message},{status:500});
   }
   return NextResponse.json({
-   groups:r[6].data,places:r[7].data,events:r[0].data,clients:r[1].data,talent:r[2].data,shows:r[3].data,assignments:r[4].data,showLinks:r[5].data,suppliers:r[8].data,expenses:r[9].data,payments:r[10].data,canEdit:['admin','producer'].includes(a.membership.role)
+   groups:r[6].data,places:r[7].data,events:r[0].data,clients:r[1].data,talent:r[2].data,shows:r[3].data,assignments:r[4].data,showLinks:r[5].data,suppliers:r[8].data,expenses:r[9].data,payments:r[10].data,inventoryConcepts:r[11].data,inventoryItems:r[12].data,inventoryAllocations:r[13].data,canEdit:['admin','producer'].includes(a.membership.role)
   });
  }
 

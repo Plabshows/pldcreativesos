@@ -12,13 +12,13 @@ import {FinanceSummary} from './finance-summary';
 import {eventMoney,euros,type MoneyEvent} from '@/lib/event-money';
 import {importedVenues} from '@/app/imported-venues';
 type Event=MoneyEvent & {billing_type:'invoice'|'cash';invoice_number:string|null;id:string;event_code:string;event_name:string;event_date:string|null;client_id:string|null;city:string|null;venue:string|null;status:string;internal_notes:string|null;wardrobe_notes:string|null;requested_entertainment:string|null;board_position:number;deleted_at:string|null};
-type Data={groups:{id:string;name:string}[];places:{kind:string;name:string}[];events:Event[];clients:{id:string;company_name:string}[];talent:{id:string;real_name:string;deleted_at?:string|null}[];shows:{id:string;name:string}[];assignments:{event_id:string;talent_id:string;agreed_cost_cents?:number|null;status?:string|null}[];showLinks:{event_id:string;show_id:string}[];suppliers?:{id:string;name:string}[];expenses?:{id:string;event_id:string|null;supplier_id?:string|null;supplier_name?:string;talent_id?:string|null;total_cents?:number|null;status?:string;concept?:string}[];payments?:{id:string;event_id:string;talent_id:string;status:string;amount_cents:number}[];canEdit:boolean};
+type Data={groups:{id:string;name:string}[];places:{kind:string;name:string}[];events:Event[];clients:{id:string;company_name:string}[];talent:{id:string;real_name:string;deleted_at?:string|null}[];shows:{id:string;name:string}[];assignments:{event_id:string;talent_id:string;agreed_cost_cents?:number|null;status?:string|null}[];showLinks:{event_id:string;show_id:string}[];suppliers?:{id:string;name:string}[];expenses?:{id:string;event_id:string|null;supplier_id?:string|null;supplier_name?:string;talent_id?:string|null;total_cents?:number|null;status?:string;concept?:string}[];payments?:{id:string;event_id:string;talent_id:string;status:string;amount_cents:number}[];inventoryConcepts?:{id:string;name:string;total_units:number;category:string}[];inventoryItems?:{id:string;concept_id:string;item_code:string;status:string}[];inventoryAllocations?:{id:string;event_id:string;concept_id:string;inventory_item_id?:string|null;quantity:number;status:string;rental_revenue?:number|null}[];canEdit:boolean};
 const labels:Record<string,string>={lead:'Contacto',proposal:'Propuesta',confirmed:'Confirmado',production:'Pendiente / En preparación',completed:'Completado',cancelled:'Cancelado'};
 const todayInSpain=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Madrid',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const groupOf=(e:Event,today:string)=>e.status==='cancelled'?'Cancelados':e.status==='completed'||(e.event_date&&e.event_date<today)?'Completados':'En preparación';
 const groups=['En preparación','Completados','Cancelados'];
 const groupStatus:Record<string,string>={'Confirmado':'confirmed','En preparación':'production','Completado':'completed','Cancelado':'cancelled'};
-const empty:Data={groups:[],places:[],events:[],clients:[],talent:[],shows:[],assignments:[],showLinks:[],suppliers:[],expenses:[],payments:[],canEdit:false};
+const empty:Data={groups:[],places:[],events:[],clients:[],talent:[],shows:[],assignments:[],showLinks:[],suppliers:[],expenses:[],payments:[],inventoryConcepts:[],inventoryItems:[],inventoryAllocations:[],canEdit:false};
 
 function Edit({value,type='text',disabled,label,save}:{value:string|null;type?:string;disabled:boolean;label:string;save:(v:string)=>void}){return <input key={value||''} type={type} aria-label={label} defaultValue={value||''} disabled={disabled} onBlur={e=>{if(e.target.value!==(value||''))save(e.target.value)}} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();if(e.key==='Escape'){e.stopPropagation();e.currentTarget.value=value||'';e.currentTarget.blur()}}}/>}
 function calcEventCompleteness(e:Event,data:Data){
@@ -263,6 +263,120 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
   );
  };
 
+ const renderMaterialTable=(e:Event)=>{
+  const allocations = (data.inventoryAllocations || []).filter(a=>a.event_id===e.id);
+  const concepts = data.inventoryConcepts || [];
+  const items = data.inventoryItems || [];
+
+  // Conflict check for event date
+  const conflicts: string[] = [];
+  allocations.forEach(alloc => {
+   const concept = concepts.find(c => c.id === alloc.concept_id);
+   if (!concept) return;
+   const availCount = items.filter(i => i.concept_id === alloc.concept_id && ['AVAILABLE', 'RESERVED'].includes(i.status)).length;
+   let totalNeeded = alloc.quantity;
+   if (e.event_date) {
+    const sameDateEvents = data.events.filter(x => x.event_date === e.event_date && !x.deleted_at).map(x => x.id);
+    const dateAllocations = (data.inventoryAllocations || []).filter(a => a.concept_id === alloc.concept_id && sameDateEvents.includes(a.event_id) && a.status !== 'CANCELLED');
+    totalNeeded = dateAllocations.reduce((sum, a) => sum + (a.quantity || 1), 0);
+   }
+   if (totalNeeded > availCount) {
+    conflicts.push(`⚠ ALERTA DE CONFLICTO: ${concept.name} (${availCount} disponibles / ${totalNeeded} necesarias${e.event_date ? ' para el ' + e.event_date : ''})`);
+   }
+  });
+
+  return (
+   <div style={{marginTop:'14px',background:'#fcf5ff',padding:'14px',borderRadius:'10px',border:'1px solid #e9d5ff',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'10px',flexWrap:'wrap',gap:'8px'}}>
+     <strong style={{fontSize:'14px',color:'#6b21a8',display:'flex',alignItems:'center',gap:'6px'}}>
+      <span style={{fontSize:'16px'}}>📦</span> MATERIAL / VESTUARIO Y PROPS ({allocations.length})
+     </strong>
+    </div>
+
+    {conflicts.map((msg, idx) => (
+     <div key={idx} style={{background:'#fef2f2',border:'1px solid #fca5a5',color:'#991b1b',borderRadius:'6px',padding:'8px 10px',fontSize:'12px',fontWeight:700,marginBottom:'10px'}}>
+      {msg}
+     </div>
+    ))}
+
+    {allocations.length === 0 ? (
+     <div style={{background:'#ffffff',border:'1px dashed #c084fc',borderRadius:'8px',padding:'12px',textAlign:'center',margin:'6px 0'}}>
+      <p style={{fontSize: '12px', color: '#6b21a8', margin: 0}}>
+       No hay vestuario ni material asignado a este evento aún. Usa el botón inferior para asignar piezas de inventario.
+      </p>
+     </div>
+    ) : (
+     <table style={{width:'100%',borderCollapse:'collapse',fontSize:'12px',background:'#ffffff',borderRadius:'6px',overflow:'hidden',marginBottom:'10px'}}>
+      <thead>
+       <tr style={{borderBottom:'1px solid #e5e7eb',textAlign:'left',color:'#6b7280',background:'#faf5ff'}}>
+        <th style={{padding:'6px 8px'}}>Concepto</th>
+        <th style={{padding:'6px 8px'}}>Cantidad</th>
+        <th style={{padding:'6px 8px'}}>Estado Material</th>
+        <th style={{padding:'6px 8px'}}>Alquiler Explicit (€)</th>
+        <th style={{padding:'6px 8px',textAlign:'right'}}>Acción</th>
+       </tr>
+      </thead>
+      <tbody>
+       {allocations.map(a => {
+        const concept = concepts.find(c => c.id === a.concept_id);
+        return (
+         <tr key={a.id} style={{borderBottom:'1px solid #f3f4f6'}}>
+          <td style={{padding:'6px 8px'}}><b>{concept?.name || 'Material'}</b></td>
+          <td style={{padding:'6px 8px'}}>{a.quantity} un.</td>
+          <td style={{padding:'6px 8px'}}>
+           <span style={{fontWeight:700, color: a.status==='OUT'?'#2563eb':a.status==='RETURNED'?'#059669':'#d97706'}}>
+            {a.status}
+           </span>
+          </td>
+          <td style={{padding:'6px 8px'}}>{a.rental_revenue ? `${a.rental_revenue / 100} €` : 'Incluido'}</td>
+          <td style={{padding:'6px 8px',textAlign:'right'}}>
+           <button disabled={disabled} style={{border:0,background:'none',color:'#ef4444',cursor:'pointer',fontSize:'12px'}} onClick={async()=>{
+            await fetch('/api/inventory', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'deleteAllocation', id:a.id})});
+            void load();
+           }}>Quitar</button>
+          </td>
+         </tr>
+        );
+       })}
+      </tbody>
+     </table>
+    )}
+
+    <button
+     disabled={disabled}
+     style={{padding:'6px 10px',borderRadius:'4px',border:'1px dashed #c084fc',background:'#fff',color:'#6b21a8',fontWeight:600,cursor:'pointer',fontSize:'12px'}}
+     onClick={async ()=>{
+      if (!concepts.length) { window.alert('No hay conceptos en inventario.'); return; }
+      const conceptList = concepts.map((c, i) => `${i + 1}. ${c.name}`).join('\n');
+      const choice = window.prompt(`Selecciona el número del concepto a asignar:\n${conceptList}`);
+      if (!choice) return;
+      const idx = parseInt(choice, 10) - 1;
+      if (isNaN(idx) || idx < 0 || idx >= concepts.length) { window.alert('Opción no válida.'); return; }
+      const targetConcept = concepts[idx];
+      const qtyStr = window.prompt(`Cantidad de «${targetConcept.name}» (por defecto 1):`, '1');
+      const qty = parseInt(qtyStr || '1', 10);
+      if (isNaN(qty) || qty <= 0) { window.alert('Cantidad no válida.'); return; }
+
+      const res = await fetch('/api/inventory', {
+       method: 'POST',
+       headers: {'Content-Type': 'application/json'},
+       body: JSON.stringify({
+        action: 'allocateToEvent',
+        allocation: { event_id: e.id, concept_id: targetConcept.id, quantity: qty }
+       })
+      });
+      const resData = await responseJson(res);
+      if (!res.ok) { window.alert(resData.error || 'No se pudo asignar el material.'); return; }
+      if (resData.warning) { window.alert(resData.warning); }
+      void load();
+     }}
+    >
+     + Asignar Material / Vestuario
+    </button>
+   </div>
+  );
+ };
+
  return <section className="cb-board eb-board"><header className="cb-title"><div><p>PERFORMANCE LAB / PRODUCCIÓN</p><h1>EVENTOS</h1><span>{rows.length} eventos · espacio compartido</span></div><button onClick={onBack}>Volver a Mi día</button></header><FinanceSummary events={data.events}/><div className="cb-tabs">{[['table','Tabla principal'],['calendar','Calendario de Eventos'],['archive','Archivados']].map(([key,title])=><button key={key} className={view===key?'active':''} onClick={()=>{setView(key);setSelected([])}}>{title}</button>)}</div><div className="cb-toolbar"><button className="cb-primary" disabled={disabled} onClick={()=>setCreate(true)}>+ Agregar evento</button><label className="cb-search"><input aria-label="Buscar eventos" placeholder="Buscar / filtrar tablero" value={search} onChange={e=>setSearch(e.target.value)}/></label><select aria-label="Filtrar estado" value={status} onChange={e=>setStatus(e.target.value)}><option value="">Todos los estados</option>{Object.entries(labels).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select><select aria-label="Ordenar eventos" value={sort} onChange={e=>setSort(e.target.value)}><option value="date">Más recientes primero</option><option value="name">Nombre A–Z</option></select><details className="cb-columns"><summary>Columnas</summary><div>{columns.map(c=><label key={c}><input type="checkbox" checked={!hidden.includes(c)} onChange={()=>setHidden(h=>h.includes(c)?h.filter(x=>x!==c):[...h,c])}/>{c}</label>)}</div></details><button disabled={busy} onClick={()=>void load()}>Actualizar</button></div><p className="cb-feedback" aria-live="polite">{busy?'Guardando…':notice||'Hoy y próximos eventos en preparación; fechas anteriores a hoy en completados. Cancelados al final. Más recientes primero.'}</p>{error&&<p role="alert" className="cb-error">{error}</p>}
  {selected.length>0&&<div className="cb-bulk"><b>{selected.length} seleccionados</b><select aria-label="Cambiar estado de eventos seleccionados" disabled={disabled} value="" onChange={async e=>{if(await update(selected,{status:e.target.value}))setSelected([])}}><option value="">Cambiar estado…</option>{Object.entries(labels).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select><button disabled={disabled} onClick={async()=>{if(await save({action:'duplicate',ids:selected})){setSelected([]);setNotice('Evento duplicado correctamente.')}}}>Duplicar</button><button disabled={disabled} onClick={async()=>{if(await update(selected,{deleted_at:view==='archive'?null:new Date().toISOString()}))setSelected([])}}>{view==='archive'?'Restaurar':'Archivar'}</button><button onClick={()=>setSelected([])}>Cancelar</button></div>}
  {loading ? (
@@ -358,7 +472,7 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
    );
   })
  )}
- <Dialog.Root open={!!current} onOpenChange={v=>{if(!v)setDrawer(null)}}><Dialog.Portal><Dialog.Overlay className="cb-overlay"/><Dialog.Content className="cb-drawer"><Dialog.Title>{current?.event_name}</Dialog.Title><Dialog.Description>Evento conectado con tus bases de datos.</Dialog.Description><Dialog.Close className="cb-close">Cerrar</Dialog.Close>{error&&<p role="alert" className="cb-error">{error}</p>}<p aria-live="polite">{busy?'Guardando…':notice}</p>{current&&(()=> { const comp=calcEventCompleteness(current,data); return <><div style={{background:comp.score>=80?'rgba(0,168,107,0.1)':comp.score>=50?'rgba(253,171,61,0.1)':'rgba(235,87,87,0.1)',border:`1px solid ${comp.score>=80?'#00a86b':comp.score>=50?'#d97706':'#eb5757'}`,borderRadius:'8px',padding:'10px 14px',margin:'12px 0'}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><strong>Salud / Completitud: {comp.score}%</strong></div>{comp.missing.length>0?<p style={{fontSize:'12px',marginTop:'4px',margin:0,opacity:0.9}}>⚠ Campos requeridos pendientes: <strong>{comp.missing.join(', ')}</strong></p>:<p style={{fontSize:'12px',marginTop:'4px',margin:0,color:'#00a86b'}}>✓ Toda la información requerida está completa</p>}</div><InvoiceRelated eventId={current.id}/><FinanceOverview eventId={current.id}/><ChatGPTContextButton entityType="event" entityId={current.id} disabled={busy}/><label>Nombre<Edit value={current.event_name} label="Nombre del evento" disabled={disabled} save={v=>void update([current.id],{event_name:v})}/></label><label>Fecha del evento<Edit type="date" value={current.event_date} label="Fecha del evento" disabled={disabled} save={v=>void update([current.id],{event_date:v||null})}/></label><label>CLIENTES{clientSelect(current)}</label><label>Localización / Venue{venueSelect(current)}</label><label>Ciudad{citySelect(current)}</label><h3 style={{fontSize:'16px',fontWeight:700,color:'#1e293b',marginTop:'24px',display:'flex',alignItems:'center',gap:'6px'}}>🎭 ARTISTAS, PROVEEDORES Y SUELDOS</h3>{relationPicker(current,'talent')}{renderArtistTable(current)}{renderProviderTable(current)}<h3>SHOWS</h3>{relationPicker(current,'shows')}<h3>Presupuesto y cobro</h3>{financeColumns.map(c=><label key={c}>{c}{financeCell(current,c)}</label>)}<label>Vestuario<Edit value={current.wardrobe_notes} label="Vestuario" disabled={disabled} save={v=>void update([current.id],{wardrobe_notes:v})}/></label><label>Notas de producción<textarea key={current.internal_notes||''} aria-label="Notas de producción" defaultValue={current.internal_notes||''} disabled={disabled} onBlur={e=>{if(e.target.value!==(current.internal_notes||''))void update([current.id],{internal_notes:e.target.value})}}/></label><p>Referencia: {current.event_code}</p></>; })()}</Dialog.Content></Dialog.Portal></Dialog.Root>
+ <Dialog.Root open={!!current} onOpenChange={v=>{if(!v)setDrawer(null)}}><Dialog.Portal><Dialog.Overlay className="cb-overlay"/><Dialog.Content className="cb-drawer"><Dialog.Title>{current?.event_name}</Dialog.Title><Dialog.Description>Evento conectado con tus bases de datos.</Dialog.Description><Dialog.Close className="cb-close">Cerrar</Dialog.Close>{error&&<p role="alert" className="cb-error">{error}</p>}<p aria-live="polite">{busy?'Guardando…':notice}</p>{current&&(()=> { const comp=calcEventCompleteness(current,data); return <><div style={{background:comp.score>=80?'rgba(0,168,107,0.1)':comp.score>=50?'rgba(253,171,61,0.1)':'rgba(235,87,87,0.1)',border:`1px solid ${comp.score>=80?'#00a86b':comp.score>=50?'#d97706':'#eb5757'}`,borderRadius:'8px',padding:'10px 14px',margin:'12px 0'}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><strong>Salud / Completitud: {comp.score}%</strong></div>{comp.missing.length>0?<p style={{fontSize:'12px',marginTop:'4px',margin:0,opacity:0.9}}>⚠ Campos requeridos pendientes: <strong>{comp.missing.join(', ')}</strong></p>:<p style={{fontSize:'12px',marginTop:'4px',margin:0,color:'#00a86b'}}>✓ Toda la información requerida está completa</p>}</div><InvoiceRelated eventId={current.id}/><FinanceOverview eventId={current.id}/><ChatGPTContextButton entityType="event" entityId={current.id} disabled={busy}/><label>Nombre<Edit value={current.event_name} label="Nombre del evento" disabled={disabled} save={v=>void update([current.id],{event_name:v})}/></label><label>Fecha del evento<Edit type="date" value={current.event_date} label="Fecha del evento" disabled={disabled} save={v=>void update([current.id],{event_date:v||null})}/></label><label>CLIENTES{clientSelect(current)}</label><label>Localización / Venue{venueSelect(current)}</label><label>Ciudad{citySelect(current)}</label><h3 style={{fontSize:'16px',fontWeight:700,color:'#1e293b',marginTop:'24px',display:'flex',alignItems:'center',gap:'6px'}}>🎭 ARTISTAS, PROVEEDORES Y SUELDOS</h3>{relationPicker(current,'talent')}{renderArtistTable(current)}{renderProviderTable(current)}{renderMaterialTable(current)}<h3>SHOWS</h3>{relationPicker(current,'shows')}<h3>Presupuesto y cobro</h3>{financeColumns.map(c=><label key={c}>{c}{financeCell(current,c)}</label>)}<label>Vestuario<Edit value={current.wardrobe_notes} label="Vestuario" disabled={disabled} save={v=>void update([current.id],{wardrobe_notes:v})}/></label><label>Notas de producción<textarea key={current.internal_notes||''} aria-label="Notas de producción" defaultValue={current.internal_notes||''} disabled={disabled} onBlur={e=>{if(e.target.value!==(current.internal_notes||''))void update([current.id],{internal_notes:e.target.value})}}/></label><p>Referencia: {current.event_code}</p></>; })()}</Dialog.Content></Dialog.Portal></Dialog.Root>
  <Dialog.Root open={create} onOpenChange={setCreate}><Dialog.Portal><Dialog.Overlay className="cb-overlay"/><Dialog.Content className="cb-modal"><Dialog.Title>Agregar evento</Dialog.Title><Dialog.Description>Crea un evento propio y conecta después artistas y shows.</Dialog.Description><Dialog.Close className="cb-close">Cerrar</Dialog.Close>{error&&<p role="alert" className="cb-error">{error}</p>}<form onSubmit={async e=>{e.preventDefault();const f=new FormData(e.currentTarget);if(await save({action:'create',patch:{event_name:f.get('name'),event_date:f.get('date')||null,client_id:f.get('client')||null,venue:f.get('venue')||'',city:f.get('city')||'',status:'production'}}))setCreate(false)}}><label>Nombre<input name="name" required maxLength={500}/></label><label>Fecha<input type="date" name="date"/></label><label>Cliente{optionSelect('client')}</label><label>Localización / Venue{optionSelect('venue')}</label><label>Ciudad{optionSelect('city')}</label><button className="cb-primary" disabled={disabled}>Guardar evento</button></form></Dialog.Content></Dialog.Portal></Dialog.Root>
  </section>;
 }
