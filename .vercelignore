@@ -11,3 +11,7 @@ coverage/
 .DS_Store
 tmp/
 /tmp/pdfs/
+
+/performance-lab-os-src.zip
+
+/scratch_*

@@ -4,6 +4,7 @@ import {useEffect, useMemo, useState} from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import {AlertCircle, Box, CheckCircle2, ChevronRight, DollarSign, Filter, Wrench, Package, Plus, Search, ShieldAlert, Sparkles, Tag, Truck} from 'lucide-react';
 import {responseJson} from '@/lib/response-json';
+import {inventoryFinance} from '@/lib/inventory-finance';
 import './inventory-workspace.css';
 
 type Concept = {
@@ -460,7 +461,7 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
                       <p style={{fontSize: 12, color: '#475569', margin: '4px 0'}}>{r.problem}</p>
                       <div style={{fontSize: 11, color: '#64748b', display: 'flex', justifyContent: 'space-between'}}>
                         <span>Asignado: {r.assigned_to || 'Sin asignar'}</span>
-                        <span>Coste: {r.actual_cost ? `${r.actual_cost / 100} €` : r.estimated_cost ? `Est. ${r.estimated_cost / 100} €` : '0 €'}</span>
+                        <span>Coste: {r.actual_cost !== null ? `${r.actual_cost / 100} €` : r.estimated_cost !== null ? `Est. ${r.estimated_cost / 100} €` : 'Sin indicar'}</span>
                       </div>
                     </div>
                   );
@@ -486,11 +487,7 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
               const cAllocations = allocations.filter(a => a.concept_id === selectedConcept.id);
               const cRepairs = repairs.filter(r => cItems.some(i => i.id === r.inventory_item_id));
 
-              const totalExplicitRevenue = cAllocations.reduce((sum, a) => sum + (a.rental_revenue || 0), 0) / 100;
-              const totalProductionCost = (selectedConcept.production_cost || 0) / 100;
-              const totalRepairCosts = cRepairs.reduce((sum, r) => sum + (r.actual_cost || r.estimated_cost || 0), 0) / 100;
-              const netProfit = totalExplicitRevenue - totalRepairCosts - totalProductionCost;
-              const roiPercent = totalProductionCost > 0 ? ((netProfit / totalProductionCost) * 100).toFixed(1) : '—';
+              const financials = inventoryFinance(cAllocations, cRepairs, selectedConcept.production_cost);
 
               return (
                 <div style={{display: 'flex', flexDirection: 'column', gap: 16}}>
@@ -507,13 +504,13 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
 
                   {/* Rentabilidad */}
                   <div style={{background: '#f0f9ff', padding: 14, borderRadius: 8, border: '1px solid #bae6fd'}}>
-                    <h3 style={{fontSize: 14, fontWeight: 700, color: '#0369a1', margin: '0 0 8px'}}>📊 RENTABILIDAD Y ROI</h3>
-                    <p style={{fontSize: 11, color: '#0c4a6e', margin: '0 0 10px'}}>Solo se consideran ingresos explícitos asignados al material (evitando asunciones sobre el caché del artista).</p>
+                    <h3 style={{fontSize: 14, fontWeight: 700, color: '#0369a1', margin: '0 0 8px'}}>Importes asignados al material</h3>
+                    <p style={{fontSize: 11, color: '#0c4a6e', margin: '0 0 10px'}}>Importes explícitos, excluidas cancelaciones. No acreditan cobros ni beneficio contable. El saldo requiere todos los importes y costes reales. Reparaciones estimadas pendientes: {financials.estimatedRepairCost / 100} €.</p>
                     <div style={{display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, textAlign: 'center', fontSize: 12}}>
-                      <div><span style={{color: '#64748b'}}>Ingresos Alquiler</span><br/><b style={{color: '#0284c7'}}>{totalExplicitRevenue} €</b></div>
-                      <div><span style={{color: '#64748b'}}>Costes Fabricación</span><br/><b>{totalProductionCost} €</b></div>
-                      <div><span style={{color: '#64748b'}}>Costes Reparación</span><br/><b style={{color: '#dc2626'}}>{totalRepairCosts} €</b></div>
-                      <div><span style={{color: '#64748b'}}>ROI / Rentabilidad</span><br/><b style={{color: netProfit >= 0 ? '#059669' : '#dc2626'}}>{netProfit} € ({roiPercent}%)</b></div>
+                      <div><span style={{color: '#64748b'}}>Alquiler asignado conocido</span><br/><b style={{color: '#0284c7'}}>{financials.revenue / 100} €</b></div>
+                      <div><span style={{color: '#64748b'}}>Coste indicado del concepto</span><br/><b>{selectedConcept.production_cost === null ? 'Sin indicar' : `${selectedConcept.production_cost / 100} €`}</b></div>
+                      <div><span style={{color: '#64748b'}}>Reparaciones reales conocidas</span><br/><b style={{color: '#dc2626'}}>{financials.actualRepairCost / 100} €</b></div>
+                      <div><span style={{color: '#64748b'}}>Saldo de asignaciones</span><br/><b>{financials.balance === null ? 'Datos incompletos' : `${financials.balance / 100} €`}</b></div>
                     </div>
                   </div>
 

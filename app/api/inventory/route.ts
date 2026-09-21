@@ -78,6 +78,7 @@ export async function GET() {
   if (itemsRes.error) return NextResponse.json({error: itemsRes.error.message}, {status: 500});
   if (repairsRes.error) return NextResponse.json({error: repairsRes.error.message}, {status: 500});
   if (allocationsRes.error) return NextResponse.json({error: allocationsRes.error.message}, {status: 500});
+  if (eventsRes.error) return NextResponse.json({error: 'No se pudieron cargar los eventos del inventario.'}, {status: 500});
 
   const concepts = conceptsRes.data || [];
   const items = itemsRes.data || [];
@@ -95,7 +96,7 @@ export async function GET() {
   const lostUnits = items.filter(i => i.status === 'LOST').length;
 
   const totalInventoryValue = concepts.reduce((acc, c) => acc + (c.replacement_value || c.production_cost || 0) * (c.total_units || 0), 0);
-  const totalRepairCost = repairs.reduce((acc, r) => acc + (r.actual_cost || r.estimated_cost || 0), 0);
+  const totalRepairCost = repairs.reduce((acc, r) => acc + (r.actual_cost ?? 0), 0);
 
   const attentionItems = items.filter(i => ['REPAIR', 'CLEANING', 'LOST'].includes(i.status) || !i.location || i.condition === 'DAMAGED').map(i => {
     const concept = concepts.find(c => c.id === i.concept_id);
