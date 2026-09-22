@@ -27,7 +27,7 @@ const itemSchema = z.object({
   item_code: z.string().trim().min(1).max(100),
   name: z.string().nullable().optional(),
   size: z.string().nullable().optional(),
-  condition: z.enum(['NEW', 'EXCELLENT', 'GOOD', 'USED', 'DAMAGED']).default('UNCHECKED'),
+  condition: z.enum(['NEW', 'EXCELLENT', 'GOOD', 'USED', 'DAMAGED', 'UNCHECKED']).default('UNCHECKED'),
   status: z.enum(['AVAILABLE', 'RESERVED', 'OUT', 'REPAIR', 'CLEANING', 'LOST', 'RETIRED']).default('AVAILABLE'),
   location: z.string().nullable().optional(),
   sublocation: z.string().nullable().optional(),
