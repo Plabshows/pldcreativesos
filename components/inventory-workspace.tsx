@@ -760,7 +760,7 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
                       <tbody>
                         {cAllocations.map(a => (
                           <tr key={a.id} style={{borderBottom: '1px solid #f1f5f9'}}>
-                            <td style={{padding: 6}}><b>{a.events?.event_name || 'Evento'}</b></td>
+                            <td style={{padding: 6}}><a href={`/?event=${encodeURIComponent(a.event_id)}#eventos`} style={{color: '#2563eb', textDecoration: 'none', fontWeight: 600}}>{a.events?.event_name || 'Evento'}</a></td>
                             <td style={{padding: 6}}>{a.events?.event_date || 'Sin fecha'}</td>
                             <td style={{padding: 6}}>{a.quantity} un.</td>
                             <td style={{padding: 6}}>{a.rental_revenue == null ? 'Pendiente' : `${a.rental_revenue / 100} €`}</td>

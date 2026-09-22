@@ -38,7 +38,25 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
  async function load(){try{const r=await fetch('/api/event-board',{cache:'no-store'}),d=await responseJson(r);if(!r.ok)throw Error(d.error);setData(d);setError('');return true}catch(e){setError(String(e instanceof Error?e.message:e));return false}finally{setLoading(false)}}
  useEffect(()=>{void load();const fn=()=>void load();window.addEventListener('focus',fn);const timer=setInterval(()=>{if(document.visibilityState==='visible')void load()},15000);return()=>{clearInterval(timer);window.removeEventListener('focus',fn)}},[]);
  useEffect(()=>setSearch(query),[query]);
- useEffect(()=>{if(loading)return;const url=new URL(window.location.href),id=url.searchParams.get('event');if(!id)return;if(data.events.some(e=>e.id===id)){setDrawer(id);url.searchParams.delete('event');window.history.replaceState(null,'',url)}},[loading,data.events]);
+  useEffect(()=>{
+   const checkUrl=()=>{
+    if(loading)return;
+    const url=new URL(window.location.href),id=url.searchParams.get('event');
+    if(!id)return;
+    if(data.events.some(e=>e.id===id)){
+     setDrawer(id);
+     url.searchParams.delete('event');
+     window.history.replaceState(null,'',url);
+    }
+   };
+   checkUrl();
+   window.addEventListener('popstate',checkUrl);
+   window.addEventListener('hashchange',checkUrl);
+   return()=>{
+    window.removeEventListener('popstate',checkUrl);
+    window.removeEventListener('hashchange',checkUrl);
+   };
+  },[loading,data.events]);
  async function save(body:unknown){if(busy)return false;setBusy(true);setNotice('');try{const r=await fetch('/api/event-board',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),d=await responseJson(r);if(!r.ok)throw Error(d.error);if((d as any).requiresConfirmation){return d;}const ok=await load();if(ok)setNotice('Guardado en el espacio compartido');return ok}catch(e){setError(String(e instanceof Error?e.message:e));return false}finally{setBusy(false)}}
  const update=async(ids:string[],patch:Record<string,unknown>)=>{
   const ok=await save({action:'update',ids,patch});
