@@ -33,7 +33,7 @@ export async function GET(){
    a.supabase.from('suppliers').select('id,name').eq('organization_id',org).is('deleted_at',null).order('name').range(0,999),
    a.supabase.from('expenses').select('id,event_id,supplier_id,supplier_name,talent_id,total_cents,status,concept').eq('organization_id',org).not('event_id','is',null).neq('status','cancelled').range(0,999),
    a.supabase.from('payments').select('id,event_id,talent_id,status,amount_cents').eq('organization_id',org).eq('kind','artist').range(0,999),
-   a.supabase.from('inventory_concepts').select('id,name,total_units,category').eq('organization_id',org).order('name'),
+   a.supabase.from('inventory_concepts').select('id,name,total_units,category,active,unit_kind').eq('organization_id',org).order('name'),
    a.supabase.from('inventory_items').select('id,concept_id,item_code,status').eq('organization_id',org),
    a.supabase.from('inventory_event_allocations').select('*').eq('organization_id',org)
   ];

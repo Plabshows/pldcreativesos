@@ -12,7 +12,7 @@ import {FinanceSummary} from './finance-summary';
 import {eventMoney,euros,type MoneyEvent} from '@/lib/event-money';
 import {importedVenues} from '@/app/imported-venues';
 type Event=MoneyEvent & {billing_type:'invoice'|'cash';invoice_number:string|null;id:string;event_code:string;event_name:string;event_date:string|null;client_id:string|null;city:string|null;venue:string|null;status:string;internal_notes:string|null;wardrobe_notes:string|null;requested_entertainment:string|null;board_position:number;deleted_at:string|null};
-type Data={groups:{id:string;name:string}[];places:{kind:string;name:string}[];events:Event[];clients:{id:string;company_name:string}[];talent:{id:string;real_name:string;deleted_at?:string|null}[];shows:{id:string;name:string}[];assignments:{event_id:string;talent_id:string;agreed_cost_cents?:number|null;status?:string|null}[];showLinks:{event_id:string;show_id:string}[];suppliers?:{id:string;name:string}[];expenses?:{id:string;event_id:string|null;supplier_id?:string|null;supplier_name?:string;talent_id?:string|null;total_cents?:number|null;status?:string;concept?:string}[];payments?:{id:string;event_id:string;talent_id:string;status:string;amount_cents:number}[];inventoryConcepts?:{id:string;name:string;total_units:number;category:string}[];inventoryItems?:{id:string;concept_id:string;item_code:string;status:string}[];inventoryAllocations?:{id:string;event_id:string;concept_id:string;inventory_item_id?:string|null;quantity:number;status:string;rental_revenue?:number|null}[];canEdit:boolean};
+type Data={groups:{id:string;name:string}[];places:{kind:string;name:string}[];events:Event[];clients:{id:string;company_name:string}[];talent:{id:string;real_name:string;deleted_at?:string|null}[];shows:{id:string;name:string}[];assignments:{event_id:string;talent_id:string;agreed_cost_cents?:number|null;status?:string|null}[];showLinks:{event_id:string;show_id:string}[];suppliers?:{id:string;name:string}[];expenses?:{id:string;event_id:string|null;supplier_id?:string|null;supplier_name?:string;talent_id?:string|null;total_cents?:number|null;status?:string;concept?:string}[];payments?:{id:string;event_id:string;talent_id:string;status:string;amount_cents:number}[];inventoryConcepts?:{id:string;name:string;total_units:number;category:string;active?:boolean;unit_kind?:string}[];inventoryItems?:{id:string;concept_id:string;item_code:string;status:string;name?:string|null}[];inventoryAllocations?:{id:string;event_id:string;concept_id:string;inventory_item_id?:string|null;quantity:number;status:string;rental_revenue?:number|null}[];canEdit:boolean};
 const labels:Record<string,string>={lead:'Contacto',proposal:'Propuesta',confirmed:'Confirmado',production:'Pendiente / En preparación',completed:'Completado',cancelled:'Cancelado'};
 const todayInSpain=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Madrid',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const groupOf=(e:Event,today:string)=>e.status==='cancelled'?'Cancelados':e.status==='completed'||(e.event_date&&e.event_date<today)?'Completados':'En preparación';
@@ -270,14 +270,14 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
 
   // Conflict check for event date
   const conflicts: string[] = [];
-  allocations.forEach(alloc => {
+  allocations.filter(a => ['RESERVED','OUT'].includes(a.status)).forEach(alloc => {
    const concept = concepts.find(c => c.id === alloc.concept_id);
    if (!concept) return;
    const availCount = items.filter(i => i.concept_id === alloc.concept_id && ['AVAILABLE', 'RESERVED'].includes(i.status)).length;
    let totalNeeded = alloc.quantity;
    if (e.event_date) {
     const sameDateEvents = data.events.filter(x => x.event_date === e.event_date && !x.deleted_at).map(x => x.id);
-    const dateAllocations = (data.inventoryAllocations || []).filter(a => a.concept_id === alloc.concept_id && sameDateEvents.includes(a.event_id) && a.status !== 'CANCELLED');
+    const dateAllocations = (data.inventoryAllocations || []).filter(a => a.concept_id === alloc.concept_id && sameDateEvents.includes(a.event_id) && ['RESERVED','OUT'].includes(a.status));
     totalNeeded = dateAllocations.reduce((sum, a) => sum + (a.quantity || 1), 0);
    }
    if (totalNeeded > availCount) {
@@ -321,19 +321,28 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
         const concept = concepts.find(c => c.id === a.concept_id);
         return (
          <tr key={a.id} style={{borderBottom:'1px solid #f3f4f6'}}>
-          <td style={{padding:'6px 8px'}}><b>{concept?.name || 'Material'}</b></td>
+          <td style={{padding:'6px 8px'}}><b>{concept?.name || 'Material'}</b><br/>{items.find(i=>i.id===a.inventory_item_id)?.name || items.find(i=>i.id===a.inventory_item_id)?.item_code}</td>
           <td style={{padding:'6px 8px'}}>{a.quantity} un.</td>
           <td style={{padding:'6px 8px'}}>
-           <span style={{fontWeight:700, color: a.status==='OUT'?'#2563eb':a.status==='RETURNED'?'#059669':'#d97706'}}>
-            {a.status}
-           </span>
+           <select aria-label="Estado del material" value={a.status} disabled={disabled || ['RETURNED','CANCELLED'].includes(a.status)} onChange={async evt=>{
+            setBusy(true);
+            try {
+             const res=await fetch('/api/inventory',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'allocateToEvent',allocation:{...a,status:evt.target.value}})});
+             const d=await responseJson(res);if(!res.ok)throw Error(d.error || 'No se pudo cambiar el estado');
+             await load();
+            } catch(err){setError(err instanceof Error?err.message:'Error de material');}finally{setBusy(false);}
+           }}><option value="RESERVED">Reservado</option><option value="OUT">En evento / fuera</option><option value="RETURNED">Devuelto</option><option value="CANCELLED">Cancelado</option></select>
           </td>
-          <td style={{padding:'6px 8px'}}>{a.rental_revenue ? `${a.rental_revenue / 100} €` : 'Incluido'}</td>
+          <td style={{padding:'6px 8px'}}>{a.rental_revenue == null ? 'Pendiente' : `${a.rental_revenue / 100} €`}</td>
           <td style={{padding:'6px 8px',textAlign:'right'}}>
-           <button disabled={disabled} style={{border:0,background:'none',color:'#ef4444',cursor:'pointer',fontSize:'12px'}} onClick={async()=>{
-            await fetch('/api/inventory', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'deleteAllocation', id:a.id})});
-            void load();
-           }}>Quitar</button>
+           <button disabled={disabled || ['RETURNED','CANCELLED'].includes(a.status)} style={{border:0,background:'none',color:'#ef4444',cursor:'pointer',fontSize:'12px'}} onClick={async()=>{
+            setBusy(true);
+            try {
+             const r=await fetch('/api/inventory', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'deleteAllocation', id:a.id})});
+             const d=await responseJson(r);if(!r.ok)throw Error(d.error || 'No se pudo cancelar');
+             await load();
+            }catch(err){setError(err instanceof Error?err.message:'Error al cancelar');}finally{setBusy(false);}
+           }}>Cancelar reserva</button>
           </td>
          </tr>
         );
@@ -342,37 +351,26 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
      </table>
     )}
 
-    <button
-     disabled={disabled}
-     style={{padding:'6px 10px',borderRadius:'4px',border:'1px dashed #c084fc',background:'#fff',color:'#6b21a8',fontWeight:600,cursor:'pointer',fontSize:'12px'}}
-     onClick={async ()=>{
-      if (!concepts.length) { window.alert('No hay conceptos en inventario.'); return; }
-      const conceptList = concepts.map((c, i) => `${i + 1}. ${c.name}`).join('\n');
-      const choice = window.prompt(`Selecciona el número del concepto a asignar:\n${conceptList}`);
-      if (!choice) return;
-      const idx = parseInt(choice, 10) - 1;
-      if (isNaN(idx) || idx < 0 || idx >= concepts.length) { window.alert('Opción no válida.'); return; }
-      const targetConcept = concepts[idx];
-      const qtyStr = window.prompt(`Cantidad de «${targetConcept.name}» (por defecto 1):`, '1');
-      const qty = parseInt(qtyStr || '1', 10);
-      if (isNaN(qty) || qty <= 0) { window.alert('Cantidad no válida.'); return; }
-
-      const res = await fetch('/api/inventory', {
-       method: 'POST',
-       headers: {'Content-Type': 'application/json'},
-       body: JSON.stringify({
-        action: 'allocateToEvent',
-        allocation: { event_id: e.id, concept_id: targetConcept.id, quantity: qty }
-       })
-      });
-      const resData = await responseJson(res);
-      if (!res.ok) { window.alert(resData.error || 'No se pudo asignar el material.'); return; }
-      if (resData.warning) { window.alert(resData.warning); }
-      void load();
-     }}
-    >
-     + Asignar Material / Vestuario
-    </button>
+    <form style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'end'}} onSubmit={async evt=>{
+     evt.preventDefault(); if(busy)return;
+     const form=evt.currentTarget, fields=new FormData(form);
+     setBusy(true);
+     try {
+      const revenue=String(fields.get('rental_revenue') || '').trim();
+      const res=await fetch('/api/inventory',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+       action:'allocateToEvent',allocation:{event_id:e.id,concept_id:fields.get('concept_id'),quantity:Number(fields.get('quantity')),
+       rental_revenue:revenue ? Math.round(Number(revenue.replace(',','.'))*100) : null}
+      })});
+      const d=await responseJson(res);if(!res.ok)throw Error(d.error || 'No se pudo reservar');
+      await load();form.reset();
+     }catch(err){setError(err instanceof Error?err.message:'Error al reservar');}finally{setBusy(false);}
+    }}>
+     <label>Artículo<select name="concept_id" required disabled={disabled}><option value="">Seleccionar material…</option>{concepts.filter(c=>c.active!==false).map(c=><option key={c.id} value={c.id}>{c.name} · {items.filter(i=>i.concept_id===c.id && i.status==='AVAILABLE').length} {c.unit_kind==='set'?'sets':'piezas'} disponibles</option>)}</select></label>
+     <label>Cantidad<input name="quantity" type="number" min="1" step="1" defaultValue="1" required style={{width:75}} disabled={disabled}/></label>
+     <label>Alquiler total asignado (€)<input name="rental_revenue" type="number" min="0" step="0.01" placeholder="Pendiente" disabled={disabled}/></label>
+     <button className="cb-primary" disabled={disabled || ['completed','cancelled'].includes(e.status)}>Reservar material</button>
+     <small>Se reservan piezas concretas hasta su devolución. Al completar el evento se liberan, salvo incidencias. Este importe no registra un cobro.</small>
+    </form>
    </div>
   );
  };

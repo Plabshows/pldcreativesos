@@ -18,6 +18,8 @@ it('imports Ibiza idempotently without losing stock; reserves, returns and prote
       insert into events values('${event}','${org}','Test',current_date,null,'confirmed');`);
     await db.exec(readFileSync('supabase/migrations/202609210001_inventory_system.sql','utf8').replace('create extension if not exists unaccent;',''));
     await db.exec(readFileSync('supabase/migrations/202609220001_inventory_ibiza.sql','utf8'));
+    await db.exec(readFileSync('supabase/migrations/202609220002_inventory_availability_guard.sql','utf8'));
+    await db.exec(readFileSync('supabase/migrations/202609220003_inventory_lifecycle.sql','utf8'));
     const file=join(tmpdir(),'plab-ibiza-test.sql');
     execFileSync(process.execPath,['tools/prepare-ibiza-import.mjs',file]);
     const sql=readFileSync(file,'utf8');
@@ -33,6 +35,7 @@ it('imports Ibiza idempotently without losing stock; reserves, returns and prote
     const result=await db.query<{data:{id:string;inventory_item_id:string}[]}>('select save_inventory_allocation($1,$2::jsonb) data',[org,JSON.stringify(payload)]);
     const allocations=result.rows[0].data;
     expect(allocations).toHaveLength(2);
+    await expect(db.query("update inventory_items set status='AVAILABLE' where id=$1",[allocations[0].inventory_item_id])).rejects.toThrow('reserva');
     expect((await db.query<{n:number}>("select count(*)::int n from inventory_items where status='RESERVED'")).rows[0].n).toBe(2);
     await expect(db.query('select save_inventory_allocation($1,$2::jsonb)',[org,JSON.stringify({...payload,quantity:8})])).rejects.toThrow('suficientes');
     await db.query('insert into inventory_repairs(organization_id,inventory_item_id,problem,incident_type) values($1,$2,$3,$4)',[org,allocations[0].inventory_item_id,'Limpieza','cleaning']);
@@ -41,5 +44,16 @@ it('imports Ibiza idempotently without losing stock; reserves, returns and prote
     expect((await db.query<{status:string}>('select status from inventory_items where id=$1',[allocations[1].inventory_item_id])).rows[0].status).toBe('AVAILABLE');
     expect((await db.query<{n:number}>("select count(*)::int n from inventory_event_allocations where status='RETURNED'")).rows[0].n).toBe(2);
     await expect(db.query('select save_inventory_allocation($1,$2::jsonb)',[org,JSON.stringify(payload)])).rejects.toThrow('activo');
+    // Returned history must not become a cancellation (which would remove its revenue).
+    await expect(db.query('select save_inventory_allocation($1,$2::jsonb)',[org,JSON.stringify({...payload,id:allocations[1].id,quantity:1,status:'CANCELLED'})])).rejects.toThrow('cerrada');
+    const piece=allocations[0].inventory_item_id;
+    await db.query('insert into inventory_repairs(organization_id,inventory_item_id,problem,incident_type) values($1,$2,$3,$4)',[org,piece,'No localizada','lost']);
+    await db.query('insert into inventory_repairs(organization_id,inventory_item_id,problem,incident_type) values($1,$2,$3,$4)',[org,piece,'Lavado adicional','cleaning']);
+    expect((await db.query<{status:string}>('select status from inventory_items where id=$1',[piece])).rows[0].status).toBe('LOST');
+    await db.query("update inventory_repairs set status='DONE' where inventory_item_id=$1 and incident_type='lost'",[piece]);
+    expect((await db.query<{status:string}>('select status from inventory_items where id=$1',[piece])).rows[0].status).toBe('CLEANING');
+    await db.query("update inventory_items set status='RETIRED' where id=$1",[piece]);
+    await db.query("update inventory_repairs set status='DONE' where inventory_item_id=$1",[piece]);
+    expect((await db.query<{status:string}>('select status from inventory_items where id=$1',[piece])).rows[0].status).toBe('RETIRED');
   } finally { await db.close(); }
 },30000);

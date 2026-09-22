@@ -4,7 +4,7 @@ import {useEffect, useMemo, useState} from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import {AlertCircle, Box, CheckCircle2, ChevronRight, DollarSign, Filter, Wrench, Package, Plus, Search, ShieldAlert, Sparkles, Tag, Truck} from 'lucide-react';
 import {responseJson} from '@/lib/response-json';
-import {inventoryFinance} from '@/lib/inventory-finance';
+import {inventoryFinance, inventoryInvestment} from '@/lib/inventory-finance';
 import './inventory-workspace.css';
 
 type Concept = {
@@ -121,6 +121,7 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
   // Filters for Catalog
   const [search, setSearch] = useState(query);
   const [catFilter, setCatFilter] = useState('');
+  const [sortByRoi, setSortByRoi] = useState(false);
   const [familyFilter, setFamilyFilter] = useState('');
   const [locFilter, setLocFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -130,10 +131,35 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
   const [newConceptOpen, setNewConceptOpen] = useState(false);
   const [newItemOpen, setNewItemOpen] = useState(false);
   const [newRepairOpen, setNewRepairOpen] = useState(false);
+  const [editingRepair, setEditingRepair] = useState<Repair | null>(null);
   const [editingConcept, setEditingConcept] = useState<Concept | null>(null);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+
+  const [conceptImage, setConceptImage] = useState('');
+  const [itemImage, setItemImage] = useState('');
+  const [repairBeforeImage, setRepairBeforeImage] = useState('');
+  const [repairAfterImage, setRepairAfterImage] = useState('');
+  const [uploading, setUploading] = useState(false);
+
+  async function handleImageUpload(file: File | undefined, setUrl: (url: string) => void) {
+    if (!file) return;
+    setUploading(true);
+    setFormError('');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await fetch('/api/inventory/upload', {method: 'POST', body: fd});
+      const d = await responseJson(r);
+      if (!r.ok) throw new Error(d.error || 'No se pudo subir la imagen.');
+      setUrl(d.url);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Error al subir la imagen.');
+    } finally {
+      setUploading(false);
+    }
+  }
 
   useEffect(() => setSearch(query), [query]);
 
@@ -169,8 +195,15 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
       const cItems = items.filter(i => i.concept_id === c.id);
       const matchStatus = !statusFilter || cItems.some(i => i.status === statusFilter);
       return matchSearch && matchCat && matchLoc && matchStatus && (!familyFilter || c.family === familyFilter);
-    });
-  }, [concepts, items, search, catFilter, locFilter, statusFilter, familyFilter]);
+    })
+      .sort((a,b) => {
+        if (!sortByRoi) return a.name.localeCompare(b.name);
+        const roi=(c:Concept) => { const units=items.filter(i=>i.concept_id===c.id); return inventoryFinance(
+          allocations.filter(x=>x.concept_id===c.id),repairs.filter(r=>units.some(i=>i.id===r.inventory_item_id)),
+          inventoryInvestment(units,c.production_cost)).estimatedRoi ?? -Infinity; };
+        return roi(b)-roi(a) || a.name.localeCompare(b.name);
+      });
+  }, [concepts, items, allocations, repairs, search, catFilter, locFilter, statusFilter, familyFilter, sortByRoi]);
 
   function parseMoneyInput(val: FormDataEntryValue | null): number | null {
     if (val == null) return null;
@@ -276,6 +309,8 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
   }
 
   async function saveRepair(formData: FormData) {
+    if (saving) return;
+    setSaving(true); setFormError('');
     const inventory_item_id = String(formData.get('inventory_item_id') || '');
     const problem = String(formData.get('problem') || '').trim();
     const status = String(formData.get('status') || 'PENDING') as Repair['status'];
@@ -290,6 +325,10 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
         body: JSON.stringify({
           action: 'saveRepair',
           repair: {
+            id: editingRepair?.id,
+            date_reported: String(formData.get('date_reported') || new Date().toISOString().slice(0,10)),
+            date_completed: String(formData.get('date_completed') || '') || null,
+            notes: String(formData.get('notes') || '').trim() || null,
             incident_type: String(formData.get('incident_type') || 'damage'),
             before_image: String(formData.get('before_image') || '').trim() || null,
             after_image: String(formData.get('after_image') || '').trim() || null,
@@ -303,8 +342,8 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
       setNewRepairOpen(false);
       await loadData();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error al registrar la reparación.');
-    }
+      setFormError(err instanceof Error ? err.message : 'Error al registrar la reparación.');
+    } finally { setSaving(false); }
   }
 
   async function updateItemStatus(itemId: string, newStatus: Item['status']) {
@@ -334,8 +373,8 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
           <p style={{fontSize: 13, color: '#64748b', margin: 0}}>Control de trajes, personajes, props, cabezas, reparaciones y rentabilidad de Performance Lab.</p>
         </div>
         <div style={{display: 'flex', gap: 10}}>
-          <button className="secondary-button" onClick={() => setNewRepairOpen(true)}>+ Registrar reparación</button>
-          <button className="primary-button" onClick={() => { setEditingConcept(null); setFormError(''); setNewConceptOpen(true); }}>+ Crear concepto</button>
+          <button className="secondary-button" onClick={() => { setEditingRepair(null); setRepairBeforeImage(''); setRepairAfterImage(''); setFormError(''); setNewRepairOpen(true); }}>+ Registrar reparación</button>
+          <button className="primary-button" onClick={() => { setEditingConcept(null); setConceptImage(''); setFormError(''); setNewConceptOpen(true); }}>+ Crear concepto</button>
         </div>
       </div>
 
@@ -367,12 +406,12 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
             <div className="inv-kpi-card">
               <span className="inv-kpi-label">Total Unidades</span>
               <span className="inv-kpi-value">{metrics.totalUnits}</span>
-              <span className="inv-kpi-sub">Unidades físicas</span>
+              <span className="inv-kpi-sub">Piezas y sets registrados</span>
             </div>
             <div className="inv-kpi-card" style={{borderLeft: '4px solid #10b981'}}>
               <span className="inv-kpi-label">🟢 Disponibles</span>
               <span className="inv-kpi-value" style={{color: '#059669'}}>{metrics.availableUnits}</span>
-              <span className="inv-kpi-sub">Listos para evento</span>
+              <span className="inv-kpi-sub">Sin reserva; comprobar condición</span>
             </div>
             <div className="inv-kpi-card" style={{borderLeft: '4px solid #3b82f6'}}>
               <span className="inv-kpi-label">📦 Reservados / Fuera</span>
@@ -396,8 +435,8 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
             </div>
             <div className="inv-kpi-card" style={{gridColumn: 'span 2'}}>
               <span className="inv-kpi-label">Valor Total Estimado</span>
-              <span className="inv-kpi-value">{(metrics.totalInventoryValue / 100).toLocaleString('es-ES')} €</span>
-              <span className="inv-kpi-sub">Valor de reposición/coste</span>
+              <span className="inv-kpi-value">{items.some(i=>i.estimated_value != null) ? `${(metrics.totalInventoryValue / 100).toLocaleString('es-ES')} €` : 'Pendiente'}</span>
+              <span className="inv-kpi-sub">Suma de valores indicados · {items.filter(i=>i.estimated_value == null).length} sin valorar</span>
             </div>
             <div className="inv-kpi-card" style={{gridColumn: 'span 2'}}>
               <span className="inv-kpi-label">Costes Mantenimiento / Reparación</span>
@@ -443,6 +482,7 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
               <option value="">Todas las categorías</option>
               {[...new Set([...CATEGORIES, ...concepts.map(c => c.subcategory).filter((s): s is string => !!s)])].map(c => <option key={c} value={c}>{c}</option>)}
             </select>
+            <select aria-label="Ordenar inventario" value={sortByRoi ? 'roi' : 'name'} onChange={e=>setSortByRoi(e.target.value==='roi')}><option value="name">Nombre A–Z</option><option value="roi">ROI estimado (datos completos primero)</option></select>
             <select aria-label="Filtrar familia" value={familyFilter} onChange={e => setFamilyFilter(e.target.value)}><option value="">Todas las familias</option>{[...new Set(concepts.map(c => c.family).filter((s): s is string => !!s))].sort().map(f => <option key={f}>{f}</option>)}</select>
             <select value={locFilter} onChange={e => setLocFilter(e.target.value)} aria-label="Filtrar por ubicación">
               <option value="">Todas las ubicaciones</option>
@@ -464,7 +504,7 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
               const inRepair = cItems.filter(i => i.status === 'REPAIR').length;
               const inClean = cItems.filter(i => i.status === 'CLEANING').length;
               const cAllocations = allocations.filter(a => a.concept_id === c.id);
-              const uses2026 = cAllocations.filter(a => a.status !== 'CANCELLED').length;
+              const uses2026 = new Set(cAllocations.filter(a => a.status !== 'CANCELLED').map(a=>a.event_id)).size;
               const suggestedFee = c.suggested_rental_price ? (c.suggested_rental_price / 100) : null;
 
               return (
@@ -489,7 +529,7 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
                     </div>
                     <div style={{fontSize: 12, color: '#475569', display: 'flex', justifyContent: 'space-between', marginTop: 'auto', paddingTop: 8, borderTop: '1px solid #f1f5f9'}}>
                       <span>📍 {c.default_location || 'Ibiza Warehouse'}</span>
-                      <span>Usos 2026: <strong>{uses2026}</strong></span>
+                      <span>Eventos: <strong>{uses2026}</strong></span>
                     </div>
                     {suggestedFee != null && (
                       <div style={{fontSize: 12, fontWeight: 700, color: '#2563eb'}}>
@@ -516,6 +556,7 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
                   const concept = concepts.find(c => c.id === item?.concept_id);
                   return (
                     <div key={r.id} className="inv-repair-card">
+                      <button className="secondary-button" onClick={() => { setEditingRepair(r); setFormError(''); setNewRepairOpen(true); }}>Editar / resolver incidencia</button>
                       <b style={{fontSize: 13, color: '#0f172a'}}>{concept?.name} — {item?.item_code || 'Unidad'}</b>
                       <p style={{fontSize: 12, color: '#475569', margin: '4px 0'}}>{r.problem}</p>
                       <div style={{fontSize: 11, color: '#64748b', display: 'flex', justifyContent: 'space-between'}}>
@@ -546,11 +587,12 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
               const cAllocations = allocations.filter(a => a.concept_id === selectedConcept.id);
               const cRepairs = repairs.filter(r => cItems.some(i => i.id === r.inventory_item_id));
 
-              const financials = inventoryFinance(cAllocations, cRepairs, selectedConcept.production_cost);
+              const investment = inventoryInvestment(cItems, selectedConcept.production_cost);
+              const financials = inventoryFinance(cAllocations, cRepairs, investment);
 
               return (
                 <div style={{display: 'flex', flexDirection: 'column', gap: 16}}>
-                  <button className="secondary-button" onClick={() => { setEditingConcept(selectedConcept); setFormError(''); setNewConceptOpen(true); }}>Editar ficha del artículo</button>
+                  <button className="secondary-button" onClick={() => { setEditingConcept(selectedConcept); setConceptImage(selectedConcept.main_image || ''); setFormError(''); setNewConceptOpen(true); }}>Editar ficha del artículo</button>
                   <div style={{background: '#f8fafc', padding: 14, borderRadius: 8, border: '1px solid #e2e8f0', display: 'flex', gap: 12}}>
                     {selectedConcept.main_image && (
                       <img src={selectedConcept.main_image} alt={selectedConcept.name} style={{width: 80, height: 80, objectFit: 'cover', borderRadius: 6}}/>
@@ -575,22 +617,24 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
                     <p style={{fontSize: 11, color: '#0c4a6e', margin: '0 0 10px'}}>Importes explícitos, excluidas cancelaciones. No acreditan cobros ni beneficio contable. El saldo requiere todos los importes y costes reales. Reparaciones estimadas pendientes: {financials.estimatedRepairCost / 100} €.</p>
                     <div style={{display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, textAlign: 'center', fontSize: 12}}>
                       <div><span style={{color: '#64748b'}}>Alquiler asignado conocido</span><br/><b style={{color: '#0284c7'}}>{financials.revenue / 100} €</b></div>
-                      <div><span style={{color: '#64748b'}}>Coste indicado del concepto</span><br/><b>{selectedConcept.production_cost === null ? 'Sin indicar' : `${selectedConcept.production_cost / 100} €`}</b></div>
+                      <div><span style={{color: '#64748b'}}>Inversión documentada</span><br/><b>{investment === null ? 'Sin indicar' : `${investment / 100} €`}</b></div>
                       <div><span style={{color: '#64748b'}}>Reparaciones reales conocidas</span><br/><b style={{color: '#dc2626'}}>{financials.actualRepairCost / 100} €</b></div>
                       <div><span style={{color: '#64748b'}}>Saldo de asignaciones</span><br/><b>{financials.balance === null ? 'Datos incompletos' : `${financials.balance / 100} €`}</b></div>
                     </div>
                   </div>
 
+                  <p style={{fontSize:12}}>ROI estimado: <strong>{financials.estimatedRoi === null ? 'Pendiente de costes e importes completos' : financials.estimatedRoi.toFixed(1) + '%'}</strong>. Se calcula sobre alquileres asignados, no sobre cobros acreditados.</p>
                   {/* Unidades Físicas */}
                   <div>
                     <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
                       <h3 style={{fontSize: 14, fontWeight: 700, margin: 0}}>UNIDADES FÍSICAS ({cItems.length})</h3>
-                      <button className="secondary-button" style={{fontSize: 11}} onClick={() => { setEditingItem(null); setFormError(''); setNewItemOpen(true); }}>+ Añadir pieza física</button>
+                      <button className="secondary-button" style={{fontSize: 11}} onClick={() => { setEditingItem(null); setItemImage(selectedConcept.main_image || ''); setFormError(''); setNewItemOpen(true); }}>+ Añadir pieza física</button>
                     </div>
 
                     <table style={{width: '100%', fontSize: 12, borderCollapse: 'collapse'}}>
                       <thead>
                         <tr style={{background: '#f1f5f9', textAlign: 'left', borderBottom: '1px solid #cbd5e1'}}>
+                          <th style={{padding: 6}}>Foto</th>
                           <th style={{padding: 6}}>Código</th>
                           <th style={{padding: 6}}>Talla</th>
                           <th style={{padding: 6}}>Estado</th>
@@ -601,8 +645,15 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
                       <tbody>
                         {cItems.map(item => (
                           <tr key={item.id} style={{borderBottom: '1px solid #f1f5f9'}}>
-                            <td style={{padding: 6}}><button className="secondary-button" onClick={() => { setEditingItem(item); setFormError(''); setNewItemOpen(true); }}>{item.name || item.item_code} ({item.item_code}) · Editar ficha</button></td>
-                            <td style={{padding: 6}}>{item.size || 'Única'}</td>
+                            <td style={{padding: 6}}>
+                              {(item.main_image || selectedConcept.main_image) ? (
+                                <img src={item.main_image || selectedConcept.main_image!} alt="" style={{width: 36, height: 36, objectFit: 'cover', borderRadius: 6, border: '1px solid #cbd5e1'}} />
+                              ) : (
+                                <span style={{fontSize: 10, color: '#94a3b8'}}>Sin foto</span>
+                              )}
+                            </td>
+                            <td style={{padding: 6}}><button className="secondary-button" onClick={() => { setEditingItem(item); setItemImage(item.main_image || selectedConcept.main_image || ''); setFormError(''); setNewItemOpen(true); }}>{item.name || item.item_code} ({item.item_code}) · Editar ficha</button></td>
+                            <td style={{padding: 6}}>{item.size || 'Pendiente'}</td>
                             <td style={{padding: 6}}>
                               <span style={{
                                 color: item.status === 'AVAILABLE' ? '#059669' : item.status === 'REPAIR' ? '#dc2626' : item.status === 'CLEANING' ? '#d97706' : '#2563eb',
@@ -624,7 +675,7 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
                           </tr>
                         ))}
                         {cItems.length === 0 && (
-                          <tr><td colSpan={5} style={{padding: 10, textAlign: 'center', color: '#94a3b8'}}>No hay unidades físicas registradas para este concepto. Haz clic en "+ Añadir pieza física".</td></tr>
+                          <tr><td colSpan={6} style={{padding: 10, textAlign: 'center', color: '#94a3b8'}}>No hay unidades físicas registradas para este concepto. Haz clic en "+ Añadir pieza física".</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -661,7 +712,30 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
                           <label>Fecha de compra / fabricación<input type="date" name="purchase_or_build_date" defaultValue={editingItem?.purchase_or_build_date?.slice(0, 10) || ''}/></label>
                           <label>Coste de fabricación (€)<input type="number" min="0" step="0.01" name="production_cost" defaultValue={editingItem?.production_cost == null ? '' : editingItem.production_cost / 100}/></label>
                           <label>Valor de reposición (€)<input type="number" min="0" step="0.01" name="replacement_value" defaultValue={editingItem?.replacement_value == null ? '' : editingItem.replacement_value / 100}/></label>
-                          <label>Enlace de imagen<input name="main_image" defaultValue={editingItem?.main_image || ''}/></label>
+                          <div style={{margin: '8px 0', background: '#f8fafc', padding: 10, borderRadius: 8, border: '1px solid #e2e8f0'}}>
+                            <label style={{fontWeight: 700, fontSize: 13, display: 'block', marginBottom: 6}}>
+                              Foto de la pieza física (Subir imagen)
+                            </label>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              disabled={uploading}
+                              onChange={e => void handleImageUpload(e.target.files?.[0], setItemImage)}
+                              style={{fontSize: 12, marginBottom: 8, display: 'block', width: '100%'}}
+                            />
+                            {itemImage ? (
+                              <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
+                                <img src={itemImage} alt="Foto previa" style={{width: 72, height: 72, objectFit: 'cover', borderRadius: 6, border: '1px solid #cbd5e1'}} />
+                                <div>
+                                  <span style={{fontSize: 11, color: '#059669', fontWeight: 700, display: 'block'}}>✓ Foto cargada</span>
+                                  <button type="button" className="secondary-button" style={{fontSize: 10, padding: '2px 6px', marginTop: 4}} onClick={() => setItemImage('')}>Quitar foto</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <p style={{fontSize: 11, color: '#94a3b8', margin: 0}}>Sube una imagen desde tu dispositivo (JPG, PNG, WEBP).</p>
+                            )}
+                            <input type="hidden" name="main_image" value={itemImage}/>
+                          </div>
                           <label>Notas<textarea name="notes" defaultValue={editingItem?.notes || ''}/></label>
                           {formError && <p role="alert">{formError}</p>}
                           <button disabled={saving} className="primary-button" style={{marginTop: 10}}>{saving ? 'Guardando…' : 'Guardar cambios'}</button>
@@ -689,7 +763,7 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
                             <td style={{padding: 6}}><b>{a.events?.event_name || 'Evento'}</b></td>
                             <td style={{padding: 6}}>{a.events?.event_date || 'Sin fecha'}</td>
                             <td style={{padding: 6}}>{a.quantity} un.</td>
-                            <td style={{padding: 6}}>{a.rental_revenue ? `${a.rental_revenue / 100} €` : 'Incluido'}</td>
+                            <td style={{padding: 6}}>{a.rental_revenue == null ? 'Pendiente' : `${a.rental_revenue / 100} €`}</td>
                           </tr>
                         ))}
                         {cAllocations.length === 0 && (
@@ -730,7 +804,30 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
               <label>Precio Alquiler Sugerido (€)<input name="suggested_rental_price" type="number" min="0" step="0.01" defaultValue={editingConcept?.suggested_rental_price == null ? '' : editingConcept.suggested_rental_price / 100}/></label>
               <label>Coste de Fabricación (€)<input name="production_cost" type="number" min="0" step="0.01" defaultValue={editingConcept?.production_cost == null ? '' : editingConcept.production_cost / 100}/></label>
               <label>Valor de Reposición (€)<input name="replacement_value" type="number" min="0" step="0.01" defaultValue={editingConcept?.replacement_value == null ? '' : editingConcept.replacement_value / 100}/></label>
-              <label>Enlace de imagen<input name="main_image" defaultValue={editingConcept?.main_image || ''}/></label>
+              <div style={{margin: '8px 0', background: '#f8fafc', padding: 10, borderRadius: 8, border: '1px solid #e2e8f0'}}>
+                <label style={{fontWeight: 700, fontSize: 13, display: 'block', marginBottom: 6}}>
+                  Foto del concepto / vestuario (Subir imagen)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={uploading}
+                  onChange={e => void handleImageUpload(e.target.files?.[0], setConceptImage)}
+                  style={{fontSize: 12, marginBottom: 8, display: 'block', width: '100%'}}
+                />
+                {conceptImage ? (
+                  <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
+                    <img src={conceptImage} alt="Foto previa" style={{width: 72, height: 72, objectFit: 'cover', borderRadius: 6, border: '1px solid #cbd5e1'}} />
+                    <div>
+                      <span style={{fontSize: 11, color: '#059669', fontWeight: 700, display: 'block'}}>✓ Foto cargada</span>
+                      <button type="button" className="secondary-button" style={{fontSize: 10, padding: '2px 6px', marginTop: 4}} onClick={() => setConceptImage('')}>Quitar foto</button>
+                    </div>
+                  </div>
+                ) : (
+                  <p style={{fontSize: 11, color: '#94a3b8', margin: 0}}>Sube una foto del vestuario, personaje o prop desde tu ordenador o móvil.</p>
+                )}
+                <input type="hidden" name="main_image" value={conceptImage}/>
+              </div>
               <label>Notas<textarea name="notes" defaultValue={editingConcept?.notes || ''}/></label>
               {formError && <p role="alert">{formError}</p>}
               <button disabled={saving} className="primary-button" style={{marginTop: 10}}>{saving ? 'Guardando…' : editingConcept ? 'Guardar cambios' : 'Crear concepto'}</button>
@@ -741,34 +838,62 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
       </Dialog.Root>
 
       {/* Modal Registrar Reparación */}
-      <Dialog.Root open={newRepairOpen} onOpenChange={setNewRepairOpen}>
+      <Dialog.Root open={newRepairOpen} onOpenChange={v => { if (!saving) setNewRepairOpen(v); }}>
         <Dialog.Portal>
           <Dialog.Overlay className="cb-overlay"/>
           <Dialog.Content className="cb-modal" style={{maxHeight: '90dvh', overflowY: 'auto'}}>
-            <Dialog.Title>Registrar incidencia / mantenimiento</Dialog.Title>
-            <form onSubmit={e => { e.preventDefault(); void saveRepair(new FormData(e.currentTarget)); }}>
+            <Dialog.Title>{editingRepair ? 'Editar incidencia' : 'Registrar incidencia / mantenimiento'}</Dialog.Title>
+            <Dialog.Description>Completa los costes y marca la incidencia como terminada cuando esté resuelta.</Dialog.Description>
+            <form key={editingRepair?.id || 'new'} onSubmit={e => { e.preventDefault(); void saveRepair(new FormData(e.currentTarget)); }}>
               <label>Seleccionar Unidad Física
-                <select name="inventory_item_id" required>
+                <select name="inventory_item_id" required defaultValue={editingRepair?.inventory_item_id} disabled={!!editingRepair}>
                   {items.map(i => {
                     const c = concepts.find(x => x.id === i.concept_id);
                     return <option key={i.id} value={i.id}>{c?.name} — {i.item_code} ({i.status})</option>;
                   })}
                 </select>
               </label>
-              <label>Tipo de incidencia<select name="incident_type"><option value="damage">Daños</option><option value="lost">Pieza perdida</option><option value="repair">Reparación</option><option value="cleaning">Limpieza</option></select></label>
-              <label>Foto antes (enlace)<input name="before_image"/></label><label>Foto después (enlace)<input name="after_image"/></label>
-              <label>Problema / Daño detectado<textarea name="problem" required placeholder="Ej: Cremallera rota tras show"/></label>
-              <label>Asignado a (Taller / Persona)<input name="assigned_to" placeholder="Ej: Taller Valencia / Sara"/></label>
-              <label>Coste Estimado (€)<input name="estimated_cost" type="number" step="0.01" placeholder="0.00"/></label>
-              <label>Coste Real (€)<input name="actual_cost" type="number" step="0.01" placeholder="0.00"/></label>
+              {editingRepair && <input type="hidden" name="inventory_item_id" value={editingRepair.inventory_item_id}/>}
+              <label>Fecha de incidencia<input type="date" name="date_reported" required defaultValue={editingRepair?.date_reported || new Date().toISOString().slice(0,10)}/></label>
+              <label>Fecha de resolución<input type="date" name="date_completed" defaultValue={editingRepair?.date_completed || ''}/></label>
+              <label>Tipo de incidencia<select name="incident_type" defaultValue={editingRepair?.incident_type || 'damage'}><option value="damage">Daños</option><option value="lost">Pieza perdida</option><option value="repair">Reparación</option><option value="cleaning">Limpieza</option></select></label>
+              <div style={{margin: '8px 0', background: '#f8fafc', padding: 10, borderRadius: 8, border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 8}}>
+                <label style={{fontWeight: 700, fontSize: 12}}>Foto daño (Antes)</label>
+                <input type="file" accept="image/*" disabled={uploading} onChange={e => void handleImageUpload(e.target.files?.[0], setRepairBeforeImage)} style={{fontSize: 11}}/>
+                {repairBeforeImage && (
+                  <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+                    <img src={repairBeforeImage} alt="Antes" style={{width: 50, height: 50, objectFit: 'cover', borderRadius: 4}}/>
+                    <button type="button" className="secondary-button" style={{fontSize: 10, padding: '2px 6px'}} onClick={() => setRepairBeforeImage('')}>Quitar foto</button>
+                  </div>
+                )}
+                <input type="hidden" name="before_image" value={repairBeforeImage}/>
+
+                <label style={{fontWeight: 700, fontSize: 12, marginTop: 6}}>Foto reparación (Después)</label>
+                <input type="file" accept="image/*" disabled={uploading} onChange={e => void handleImageUpload(e.target.files?.[0], setRepairAfterImage)} style={{fontSize: 11}}/>
+                {repairAfterImage && (
+                  <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+                    <img src={repairAfterImage} alt="Después" style={{width: 50, height: 50, objectFit: 'cover', borderRadius: 4}}/>
+                    <button type="button" className="secondary-button" style={{fontSize: 10, padding: '2px 6px'}} onClick={() => setRepairAfterImage('')}>Quitar foto</button>
+                  </div>
+                )}
+                <input type="hidden" name="after_image" value={repairAfterImage}/>
+              </div>
+              <label>Problema / Daño detectado<textarea name="problem" defaultValue={editingRepair?.problem || ''} required placeholder="Ej: Cremallera rota tras show"/></label>
+              <label>Asignado a (Taller / Persona)<input name="assigned_to" defaultValue={editingRepair?.assigned_to || ''} placeholder="Ej: Taller Valencia / Sara"/></label>
+              <label>Coste Estimado (€)<input name="estimated_cost" defaultValue={editingRepair?.estimated_cost == null ? '' : editingRepair.estimated_cost / 100} min="0" type="number" step="0.01" placeholder="0.00"/></label>
+              <label>Coste Real (€)<input name="actual_cost" defaultValue={editingRepair?.actual_cost == null ? '' : editingRepair.actual_cost / 100} min="0" type="number" step="0.01" placeholder="0.00"/></label>
               <label>Estado Inicial
-                <select name="status">
+                <select name="status" defaultValue={editingRepair?.status || 'PENDING'}>
+                  <option value="NOT_REPAIRABLE">No reparable</option>
                   <option value="PENDING">Pendiente (PENDING)</option>
                   <option value="IN_PROGRESS">En proceso (IN_PROGRESS)</option>
                   <option value="DONE">Terminada (DONE)</option>
                 </select>
               </label>
-              <button className="primary-button" style={{marginTop: 10}}>Registrar Reparación</button>
+              <label>Notas<textarea name="notes" defaultValue={editingRepair?.notes || ''}/></label>
+              {formError && <p role="alert">{formError}</p>}
+              <button disabled={saving} className="primary-button" style={{marginTop: 10}}>{saving ? 'Guardando…' : 'Guardar incidencia'}</button>
+              <Dialog.Close disabled={saving} type="button" className="secondary-button">Cancelar</Dialog.Close>
             </form>
           </Dialog.Content>
         </Dialog.Portal>

@@ -261,6 +261,7 @@ export async function POST(req: Request) {
 
     if (rep.id) {
       const {data, error} = await supabase.from('inventory_repairs').update({
+        date_reported: rep.date_reported,
         incident_type: rep.incident_type,
         problem: rep.problem,
         status: rep.status,
