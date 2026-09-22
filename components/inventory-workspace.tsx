@@ -8,6 +8,9 @@ import {inventoryFinance} from '@/lib/inventory-finance';
 import './inventory-workspace.css';
 
 type Concept = {
+  subcategory?: string | null; family?: string | null; unit_kind?: string; declared_quantity?: number | null;
+  owner_name?: string | null; inventory_month?: string | null; inventory_source?: string | null;
+  review_status?: string | null; duplicate_review?: string | null; quantity_confirmation?: string | null; performer_price?: number | null;
   id: string;
   name: string;
   category: 'Characters' | 'Costumes' | 'Heads' | 'Props' | 'Accessories' | 'Technical' | 'Other';
@@ -23,13 +26,14 @@ type Concept = {
 };
 
 type Item = {
+  sublocation?: string | null; purchase_cost?: number | null; estimated_value?: number | null;
   id: string;
   concept_id: string;
   item_code: string;
   name: string | null;
   size: string | null;
-  condition: 'NEW' | 'EXCELLENT' | 'GOOD' | 'USED' | 'DAMAGED';
-  status: 'AVAILABLE' | 'RESERVED' | 'OUT' | 'REPAIR' | 'CLEANING' | 'LOST' | 'RETIRED';
+  condition: 'UNCHECKED' | 'NEW' | 'EXCELLENT' | 'GOOD' | 'USED' | 'DAMAGED';
+  status: 'RENTED' | 'AVAILABLE' | 'RESERVED' | 'OUT' | 'REPAIR' | 'CLEANING' | 'LOST' | 'RETIRED';
   location: string | null;
   purchase_or_build_date: string | null;
   production_cost: number | null;
@@ -41,6 +45,7 @@ type Item = {
 };
 
 type Repair = {
+  incident_type?: string;
   id: string;
   inventory_item_id: string;
   date_reported: string;
@@ -95,7 +100,7 @@ type AttentionItem = {
 };
 
 const CATEGORIES = ['Characters', 'Costumes', 'Heads', 'Props', 'Accessories', 'Technical', 'Other'] as const;
-const LOCATIONS = ['Ibiza Warehouse', 'Valencia', 'Dubai', 'Castellón', 'Evento', 'Taller / Reparación', 'Otra'];
+const LOCATIONS = ['Ibiza','Ibiza Warehouse', 'Valencia', 'Dubai', 'Castellón', 'Evento', 'Taller / Reparación', 'Otra'];
 
 export function InventoryWorkspace({query = ''}: {query?: string}) {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'catalog' | 'repairs'>('dashboard');
@@ -116,6 +121,7 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
   // Filters for Catalog
   const [search, setSearch] = useState(query);
   const [catFilter, setCatFilter] = useState('');
+  const [familyFilter, setFamilyFilter] = useState('');
   const [locFilter, setLocFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
@@ -124,6 +130,10 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
   const [newConceptOpen, setNewConceptOpen] = useState(false);
   const [newItemOpen, setNewItemOpen] = useState(false);
   const [newRepairOpen, setNewRepairOpen] = useState(false);
+  const [editingConcept, setEditingConcept] = useState<Concept | null>(null);
+  const [editingItem, setEditingItem] = useState<Item | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
 
   useEffect(() => setSearch(query), [query]);
 
@@ -134,6 +144,7 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
       const d = await responseJson(r);
       if (!r.ok) throw new Error(d.error || 'Error al cargar el inventario.');
       setConcepts(d.data.concepts || []);
+      setSelectedConcept(current => current ? (d.data.concepts || []).find((c: Concept) => c.id === current.id) || null : null);
       setItems(d.data.items || []);
       setRepairs(d.data.repairs || []);
       setAllocations(d.data.allocations || []);
@@ -152,16 +163,19 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
 
   const filteredConcepts = useMemo(() => {
     return concepts.filter(c => {
-      const matchSearch = `${c.name} ${c.category} ${c.description || ''} ${c.notes || ''}`.toLowerCase().includes(search.toLowerCase());
-      const matchCat = !catFilter || c.category === catFilter;
+      const matchSearch = `${c.name} ${c.category} ${c.subcategory || ''} ${c.family || ''} ${c.description || ''} ${c.notes || ''}`.toLowerCase().includes(search.toLowerCase());
+      const matchCat = !catFilter || c.category === catFilter || c.subcategory === catFilter;
       const matchLoc = !locFilter || c.default_location === locFilter;
       const cItems = items.filter(i => i.concept_id === c.id);
       const matchStatus = !statusFilter || cItems.some(i => i.status === statusFilter);
-      return matchSearch && matchCat && matchLoc && matchStatus;
+      return matchSearch && matchCat && matchLoc && matchStatus && (!familyFilter || c.family === familyFilter);
     });
-  }, [concepts, items, search, catFilter, locFilter, statusFilter]);
+  }, [concepts, items, search, catFilter, locFilter, statusFilter, familyFilter]);
 
   async function saveConcept(formData: FormData) {
+    if (saving) return;
+    setSaving(true);
+    setFormError('');
     const name = String(formData.get('name') || '').trim();
     const category = String(formData.get('category') || 'Other') as Concept['category'];
     const description = String(formData.get('description') || '').trim() || null;
@@ -179,7 +193,13 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
         body: JSON.stringify({
           action: 'saveConcept',
           concept: {
-            id: selectedConcept?.id,
+            id: editingConcept?.id,
+            subcategory: String(formData.get('subcategory') || '').trim() || null,
+            family: String(formData.get('family') || '').trim() || null,
+            owner_name: String(formData.get('owner_name') || '').trim() || null,
+            review_status: String(formData.get('review_status') || '').trim() || null,
+            active: formData.get('active') === 'true',
+            performer_price: formData.get('performer_price') ? Math.round(Number(formData.get('performer_price')) * 100) : null,
             name, category, description, default_location, suggested_rental_price, production_cost, replacement_value, main_image, notes
           }
         })
@@ -190,11 +210,16 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
       setNewConceptOpen(false);
       await loadData();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error al guardar.');
+      setFormError(err instanceof Error ? err.message : 'Error al guardar.');
+    } finally {
+      setSaving(false);
     }
   }
 
   async function saveItem(formData: FormData, conceptId: string) {
+    if (saving) return;
+    setSaving(true);
+    setFormError('');
     const item_code = String(formData.get('item_code') || '').trim();
     const name = String(formData.get('name') || '').trim() || null;
     const size = String(formData.get('size') || '').trim() || null;
@@ -209,17 +234,28 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
         body: JSON.stringify({
           action: 'saveItem',
           item: {
-            concept_id: conceptId, item_code, name, size, condition, status, location
+            id: editingItem?.id,
+            sublocation: String(formData.get('sublocation') || '').trim() || null,
+            purchase_cost: formData.get('purchase_cost') ? Math.round(Number(formData.get('purchase_cost')) * 100) : null,
+            estimated_value: formData.get('estimated_value') ? Math.round(Number(formData.get('estimated_value')) * 100) : null,
+            concept_id: conceptId, item_code, name, size, condition, status, location,
+            purchase_or_build_date: formData.get('purchase_or_build_date') || null,
+            production_cost: formData.get('production_cost') ? Math.round(Number(formData.get('production_cost')) * 100) : null,
+            replacement_value: formData.get('replacement_value') ? Math.round(Number(formData.get('replacement_value')) * 100) : null,
+            main_image: String(formData.get('main_image') || '').trim() || null,
+            notes: String(formData.get('notes') || '').trim() || null
           }
         })
       });
       const d = await responseJson(r);
       if (!r.ok) throw new Error(d.error || 'No se pudo crear la unidad física.');
-      setNotice('Unidad física creada correctamente.');
+      setNotice(editingItem ? 'Cambios guardados en la ficha.' : 'Unidad física creada correctamente.');
       setNewItemOpen(false);
       await loadData();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error al guardar.');
+      setFormError(err instanceof Error ? err.message : 'Error al guardar.');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -238,6 +274,9 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
         body: JSON.stringify({
           action: 'saveRepair',
           repair: {
+            incident_type: String(formData.get('incident_type') || 'damage'),
+            before_image: String(formData.get('before_image') || '').trim() || null,
+            after_image: String(formData.get('after_image') || '').trim() || null,
             inventory_item_id, problem, status, assigned_to, estimated_cost, actual_cost
           }
         })
@@ -280,7 +319,7 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
         </div>
         <div style={{display: 'flex', gap: 10}}>
           <button className="secondary-button" onClick={() => setNewRepairOpen(true)}>+ Registrar reparación</button>
-          <button className="primary-button" onClick={() => setNewConceptOpen(true)}>+ Crear concepto</button>
+          <button className="primary-button" onClick={() => { setEditingConcept(null); setFormError(''); setNewConceptOpen(true); }}>+ Crear concepto</button>
         </div>
       </div>
 
@@ -386,8 +425,9 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
             </div>
             <select value={catFilter} onChange={e => setCatFilter(e.target.value)} aria-label="Filtrar por categoría">
               <option value="">Todas las categorías</option>
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              {[...new Set([...CATEGORIES, ...concepts.map(c => c.subcategory).filter((s): s is string => !!s)])].map(c => <option key={c} value={c}>{c}</option>)}
             </select>
+            <select aria-label="Filtrar familia" value={familyFilter} onChange={e => setFamilyFilter(e.target.value)}><option value="">Todas las familias</option>{[...new Set(concepts.map(c => c.family).filter((s): s is string => !!s))].sort().map(f => <option key={f}>{f}</option>)}</select>
             <select value={locFilter} onChange={e => setLocFilter(e.target.value)} aria-label="Filtrar por ubicación">
               <option value="">Todas las ubicaciones</option>
               {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
@@ -419,11 +459,14 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
                     <div className="inv-card-img"><Sparkles size={28}/></div>
                   )}
                   <div className="inv-card-body">
-                    <span className="inv-card-tag">{c.category}</span>
+                    <span className="inv-card-tag">{c.subcategory || c.category}</span>
+                    {c.family && <span className="inv-card-tag">{c.family}</span>}
+                    {(c.duplicate_review || c.quantity_confirmation) && <p style={{color:'#b45309',fontSize:12}}>⚠ {c.quantity_confirmation || 'REVISAR DUPLICADO'}</p>}
+                    {c.review_status && <small>{c.review_status} · {c.active ? 'Activo' : 'Inactivo'}</small>}
                     <h3 className="inv-card-title">{c.name}</h3>
                     <p style={{fontSize: 12, color: '#64748b', margin: 0}}>{c.description || 'Sin descripción.'}</p>
                     <div className="inv-status-pill">
-                      <span>📦 {c.total_units} un.</span>
+                      <span>📦 {c.total_units} {c.unit_kind === 'set' ? 'sets' : c.unit_kind === 'components' ? 'componentes' : 'un.'}</span>
                       <span style={{color: '#059669'}}>🟢 {avail} disp.</span>
                       {inRepair > 0 && <span style={{color: '#dc2626'}}>🔴 {inRepair} rep.</span>}
                       {inClean > 0 && <span style={{color: '#d97706'}}>🧹 {inClean} limp.</span>}
@@ -491,12 +534,20 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
 
               return (
                 <div style={{display: 'flex', flexDirection: 'column', gap: 16}}>
+                  <button className="secondary-button" onClick={() => { setEditingConcept(selectedConcept); setFormError(''); setNewConceptOpen(true); }}>Editar ficha del artículo</button>
                   <div style={{background: '#f8fafc', padding: 14, borderRadius: 8, border: '1px solid #e2e8f0', display: 'flex', gap: 12}}>
                     {selectedConcept.main_image && (
                       <img src={selectedConcept.main_image} alt={selectedConcept.name} style={{width: 80, height: 80, objectFit: 'cover', borderRadius: 6}}/>
                     )}
                     <div>
-                      <span className="inv-card-tag">{selectedConcept.category}</span>
+                      <span className="inv-card-tag">{selectedConcept.subcategory || selectedConcept.category}</span>
+                      <p>{selectedConcept.family} · {selectedConcept.review_status || 'Pendiente de revisar'}</p>
+                      <p>Propietario: {selectedConcept.owner_name || 'Pendiente de completar'}</p>
+                      {selectedConcept.inventory_source && <p>{selectedConcept.inventory_source} · {selectedConcept.inventory_month}</p>}
+                      {selectedConcept.unit_kind === 'components' && <p>{selectedConcept.declared_quantity} set · {cItems.length} componentes (no se cuenta el set como otra pieza).</p>}
+                      {selectedConcept.duplicate_review && <p role="status" style={{color:'#b45309'}}>{selectedConcept.duplicate_review}</p>}
+                      {selectedConcept.quantity_confirmation && <p style={{color:'#b45309'}}>{selectedConcept.quantity_confirmation}</p>}
+                      {selectedConcept.notes && <p>{selectedConcept.notes}</p>}
                       <p style={{fontSize: 13, color: '#334155', margin: '4px 0'}}>{selectedConcept.description || 'Sin descripción especificada.'}</p>
                       <span style={{fontSize: 12, color: '#64748b'}}>Ubicación por defecto: <strong>{selectedConcept.default_location || 'Ibiza Warehouse'}</strong></span>
                     </div>
@@ -518,7 +569,7 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
                   <div>
                     <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
                       <h3 style={{fontSize: 14, fontWeight: 700, margin: 0}}>UNIDADES FÍSICAS ({cItems.length})</h3>
-                      <button className="secondary-button" style={{fontSize: 11}} onClick={() => setNewItemOpen(true)}>+ Añadir pieza física</button>
+                      <button className="secondary-button" style={{fontSize: 11}} onClick={() => { setEditingItem(null); setFormError(''); setNewItemOpen(true); }}>+ Añadir pieza física</button>
                     </div>
 
                     <table style={{width: '100%', fontSize: 12, borderCollapse: 'collapse'}}>
@@ -534,7 +585,7 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
                       <tbody>
                         {cItems.map(item => (
                           <tr key={item.id} style={{borderBottom: '1px solid #f1f5f9'}}>
-                            <td style={{padding: 6}}><b>{item.item_code}</b></td>
+                            <td style={{padding: 6}}><button className="secondary-button" onClick={() => { setEditingItem(item); setFormError(''); setNewItemOpen(true); }}>{item.name || item.item_code} ({item.item_code}) · Editar ficha</button></td>
                             <td style={{padding: 6}}>{item.size || 'Única'}</td>
                             <td style={{padding: 6}}>
                               <span style={{
@@ -547,7 +598,7 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
                               <select value={item.status} onChange={e => void updateItemStatus(item.id, e.target.value as Item['status'])} style={{fontSize: 11, padding: 2}}>
                                 <option value="AVAILABLE">AVAILABLE</option>
                                 <option value="RESERVED">RESERVED</option>
-                                <option value="OUT">OUT</option>
+                                <option value="OUT">OUT</option><option value="RENTED">Alquilado</option>
                                 <option value="REPAIR">REPAIR</option>
                                 <option value="CLEANING">CLEANING</option>
                                 <option value="LOST">LOST</option>
@@ -564,18 +615,20 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
                   </div>
 
                   {/* Modal Nueva Unidad */}
-                  <Dialog.Root open={newItemOpen} onOpenChange={setNewItemOpen}>
+                  <Dialog.Root open={newItemOpen} onOpenChange={v => { if (!saving) setNewItemOpen(v); }}>
                     <Dialog.Portal>
                       <Dialog.Overlay className="cb-overlay"/>
-                      <Dialog.Content className="cb-modal">
-                        <Dialog.Title>Añadir pieza física ({selectedConcept.name})</Dialog.Title>
-                        <form onSubmit={e => { e.preventDefault(); void saveItem(new FormData(e.currentTarget), selectedConcept.id); }}>
-                          <label>Código de pieza (ej: PPS-01)<input name="item_code" required defaultValue={`${selectedConcept.name.slice(0, 3).toUpperCase()}-${String(cItems.length + 1).padStart(2, '0')}`}/></label>
-                          <label>Nombre/Referencia opcional<input name="name" placeholder="Ej: Pom Pom Silver 01"/></label>
-                          <label>Talla / Medida<input name="size" placeholder="Ej: M / L / Única"/></label>
-                          <label>Ubicación<input name="location" defaultValue={selectedConcept.default_location || 'Ibiza Warehouse'}/></label>
+                      <Dialog.Content className="cb-modal" style={{maxHeight: '90dvh', overflowY: 'auto'}}>
+                        <Dialog.Title>{editingItem ? `Ficha de ${editingItem.item_code}` : `Añadir pieza física (${selectedConcept.name})`}</Dialog.Title>
+                        <Dialog.Description>Edita los datos y guarda los cambios. Puedes volver a abrir esta ficha cuando quieras.</Dialog.Description>
+                        <form key={editingItem?.id || 'new'} onSubmit={e => { e.preventDefault(); void saveItem(new FormData(e.currentTarget), selectedConcept.id); }}>
+                          <label>Código de pieza (ej: PPS-01)<input name="item_code" required defaultValue={editingItem?.item_code ?? `${selectedConcept.name.slice(0, 3).toUpperCase()}-${String(cItems.length + 1).padStart(2, '0')}`}/></label>
+                          <label>Nombre/Referencia opcional<input name="name" defaultValue={editingItem?.name || ''} placeholder="Ej: Pom Pom Silver 01"/></label>
+                          <label>Talla / Medida<input name="size" defaultValue={editingItem?.size || ''} placeholder="Ej: M / L / Única"/></label>
+                          <label>Ubicación<input name="location" defaultValue={editingItem ? editingItem.location || '' : selectedConcept.default_location || 'Ibiza Warehouse'}/></label>
                           <label>Condición
-                            <select name="condition">
+                            <select name="condition" defaultValue={editingItem?.condition || 'UNCHECKED'}>
+                              <option value="UNCHECKED">Por revisar</option>
                               <option value="GOOD">Buena (GOOD)</option>
                               <option value="NEW">Nueva (NEW)</option>
                               <option value="EXCELLENT">Excelente (EXCELLENT)</option>
@@ -583,7 +636,20 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
                               <option value="DAMAGED">Dañada (DAMAGED)</option>
                             </select>
                           </label>
-                          <button className="primary-button" style={{marginTop: 10}}>Guardar Unidad Física</button>
+                          <label>Estado<select name="status" defaultValue={editingItem?.status || 'AVAILABLE'}>
+                            <option value="AVAILABLE">Disponible</option><option value="RESERVED">Reservada</option><option value="OUT">En evento</option><option value="RENTED">Alquilado</option><option value="REPAIR">En reparación</option><option value="CLEANING">En limpieza</option><option value="LOST">Perdida</option><option value="RETIRED">Retirada</option>
+                          </select></label>
+                          <label>Sububicación / almacén<input name="sublocation" defaultValue={editingItem?.sublocation || ''}/></label>
+                          <label>Coste de compra (€)<input type="number" min="0" step="0.01" name="purchase_cost" defaultValue={editingItem?.purchase_cost == null ? '' : editingItem.purchase_cost / 100}/></label>
+                          <label>Valor actual estimado (€)<input type="number" min="0" step="0.01" name="estimated_value" defaultValue={editingItem?.estimated_value == null ? '' : editingItem.estimated_value / 100}/></label>
+                          <label>Fecha de compra / fabricación<input type="date" name="purchase_or_build_date" defaultValue={editingItem?.purchase_or_build_date?.slice(0, 10) || ''}/></label>
+                          <label>Coste de fabricación (€)<input type="number" min="0" step="0.01" name="production_cost" defaultValue={editingItem?.production_cost == null ? '' : editingItem.production_cost / 100}/></label>
+                          <label>Valor de reposición (€)<input type="number" min="0" step="0.01" name="replacement_value" defaultValue={editingItem?.replacement_value == null ? '' : editingItem.replacement_value / 100}/></label>
+                          <label>Enlace de imagen<input name="main_image" defaultValue={editingItem?.main_image || ''}/></label>
+                          <label>Notas<textarea name="notes" defaultValue={editingItem?.notes || ''}/></label>
+                          {formError && <p role="alert">{formError}</p>}
+                          <button disabled={saving} className="primary-button" style={{marginTop: 10}}>{saving ? 'Guardando…' : 'Guardar cambios'}</button>
+                          <Dialog.Close disabled={saving} type="button" className="secondary-button">Cancelar</Dialog.Close>
                         </form>
                       </Dialog.Content>
                     </Dialog.Portal>
@@ -624,24 +690,35 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
       </Dialog.Root>
 
       {/* Modal Nuevo Concepto */}
-      <Dialog.Root open={newConceptOpen} onOpenChange={setNewConceptOpen}>
+      <Dialog.Root open={newConceptOpen} onOpenChange={v => { if (!saving) setNewConceptOpen(v); }}>
         <Dialog.Portal>
           <Dialog.Overlay className="cb-overlay"/>
-          <Dialog.Content className="cb-modal">
-            <Dialog.Title>Nuevo Concepto de Inventario</Dialog.Title>
-            <form onSubmit={e => { e.preventDefault(); void saveConcept(new FormData(e.currentTarget)); }}>
-              <label>Nombre del Concepto<input name="name" required placeholder="Ej: POM POM SILVER"/></label>
+          <Dialog.Content className="cb-modal" style={{maxHeight: '90dvh', overflowY: 'auto'}}>
+            <Dialog.Title>{editingConcept ? `Editar ${editingConcept.name}` : 'Nuevo Concepto de Inventario'}</Dialog.Title>
+            <Dialog.Description>Guarda la ficha y vuelve a editarla siempre que lo necesites.</Dialog.Description>
+            <form key={editingConcept?.id || 'new'} onSubmit={e => { e.preventDefault(); void saveConcept(new FormData(e.currentTarget)); }}>
+              <label>Nombre del Concepto<input name="name" required defaultValue={editingConcept?.name || ''} placeholder="Ej: POM POM SILVER"/></label>
               <label>Categoría
-                <select name="category">
+                <select name="category" defaultValue={editingConcept?.category || 'Characters'}>
                   {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </label>
-              <label>Descripción<textarea name="description" placeholder="Descripción física del vestuario/prop"/></label>
-              <label>Ubicación por defecto<input name="default_location" defaultValue="Ibiza Warehouse"/></label>
-              <label>Precio Alquiler Sugerido (€)<input name="suggested_rental_price" type="number" step="0.01" placeholder="Ej: 100.00"/></label>
-              <label>Coste de Fabricación (€)<input name="production_cost" type="number" step="0.01" placeholder="Ej: 450.00"/></label>
-              <label>Valor de Reposición (€)<input name="replacement_value" type="number" step="0.01" placeholder="Ej: 600.00"/></label>
-              <button className="primary-button" style={{marginTop: 10}}>Crear Concepto</button>
+              <label>Subcategoría<input name="subcategory" list="inv-subcategories" defaultValue={editingConcept?.subcategory || ''}/><datalist id="inv-subcategories">{[...new Set(concepts.map(c => c.subcategory).filter(Boolean))].map(s => <option key={s} value={s!}/>)}</datalist></label>
+              <label>Familia / concepto principal<input name="family" defaultValue={editingConcept?.family || ''}/></label>
+              <label>Propietario / Empresa<input name="owner_name" defaultValue={editingConcept?.owner_name || ''}/></label>
+              <label>Revisión<select name="review_status" defaultValue={editingConcept?.review_status || 'Por revisar'}><option>Por revisar</option><option>Revisado</option></select></label>
+              <label>Disponibilidad<select name="active" defaultValue={editingConcept?.active === false ? 'false' : 'true'}><option value="true">Activo</option><option value="false">Inactivo</option></select></label>
+              <label>Precio con performer (€)<input name="performer_price" type="number" min="0" step="0.01" defaultValue={editingConcept?.performer_price == null ? '' : editingConcept.performer_price / 100}/></label>
+              <label>Descripción<textarea name="description" defaultValue={editingConcept?.description || ''} placeholder="Descripción física del vestuario/prop"/></label>
+              <label>Ubicación por defecto<input name="default_location" defaultValue={editingConcept ? editingConcept.default_location || '' : 'Ibiza Warehouse'}/></label>
+              <label>Precio Alquiler Sugerido (€)<input name="suggested_rental_price" type="number" min="0" step="0.01" defaultValue={editingConcept?.suggested_rental_price == null ? '' : editingConcept.suggested_rental_price / 100}/></label>
+              <label>Coste de Fabricación (€)<input name="production_cost" type="number" min="0" step="0.01" defaultValue={editingConcept?.production_cost == null ? '' : editingConcept.production_cost / 100}/></label>
+              <label>Valor de Reposición (€)<input name="replacement_value" type="number" min="0" step="0.01" defaultValue={editingConcept?.replacement_value == null ? '' : editingConcept.replacement_value / 100}/></label>
+              <label>Enlace de imagen<input name="main_image" defaultValue={editingConcept?.main_image || ''}/></label>
+              <label>Notas<textarea name="notes" defaultValue={editingConcept?.notes || ''}/></label>
+              {formError && <p role="alert">{formError}</p>}
+              <button disabled={saving} className="primary-button" style={{marginTop: 10}}>{saving ? 'Guardando…' : editingConcept ? 'Guardar cambios' : 'Crear concepto'}</button>
+              <Dialog.Close disabled={saving} type="button" className="secondary-button">Cancelar</Dialog.Close>
             </form>
           </Dialog.Content>
         </Dialog.Portal>
@@ -651,8 +728,8 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
       <Dialog.Root open={newRepairOpen} onOpenChange={setNewRepairOpen}>
         <Dialog.Portal>
           <Dialog.Overlay className="cb-overlay"/>
-          <Dialog.Content className="cb-modal">
-            <Dialog.Title>Registrar Reparación / Mantenimiento</Dialog.Title>
+          <Dialog.Content className="cb-modal" style={{maxHeight: '90dvh', overflowY: 'auto'}}>
+            <Dialog.Title>Registrar incidencia / mantenimiento</Dialog.Title>
             <form onSubmit={e => { e.preventDefault(); void saveRepair(new FormData(e.currentTarget)); }}>
               <label>Seleccionar Unidad Física
                 <select name="inventory_item_id" required>
@@ -662,6 +739,8 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
                   })}
                 </select>
               </label>
+              <label>Tipo de incidencia<select name="incident_type"><option value="damage">Daños</option><option value="lost">Pieza perdida</option><option value="repair">Reparación</option><option value="cleaning">Limpieza</option></select></label>
+              <label>Foto antes (enlace)<input name="before_image"/></label><label>Foto después (enlace)<input name="after_image"/></label>
               <label>Problema / Daño detectado<textarea name="problem" required placeholder="Ej: Cremallera rota tras show"/></label>
               <label>Asignado a (Taller / Persona)<input name="assigned_to" placeholder="Ej: Taller Valencia / Sara"/></label>
               <label>Coste Estimado (€)<input name="estimated_cost" type="number" step="0.01" placeholder="0.00"/></label>

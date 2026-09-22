@@ -13,6 +13,12 @@ const conceptSchema = z.object({
   replacement_value: z.number().int().min(0).nullable().optional(),
   suggested_rental_price: z.number().int().min(0).nullable().optional(),
   notes: z.string().nullable().optional(),
+  subcategory: z.string().nullable().optional(),
+  family: z.string().nullable().optional(),
+  owner_name: z.string().nullable().optional(),
+  review_status: z.string().nullable().optional(),
+  performer_price: z.number().int().min(0).nullable().optional(),
+  active: z.boolean().optional(),
 });
 
 const itemSchema = z.object({
@@ -21,9 +27,12 @@ const itemSchema = z.object({
   item_code: z.string().trim().min(1).max(100),
   name: z.string().nullable().optional(),
   size: z.string().nullable().optional(),
-  condition: z.enum(['NEW', 'EXCELLENT', 'GOOD', 'USED', 'DAMAGED']).default('GOOD'),
+  condition: z.enum(['NEW', 'EXCELLENT', 'GOOD', 'USED', 'DAMAGED']).default('UNCHECKED'),
   status: z.enum(['AVAILABLE', 'RESERVED', 'OUT', 'REPAIR', 'CLEANING', 'LOST', 'RETIRED']).default('AVAILABLE'),
   location: z.string().nullable().optional(),
+  sublocation: z.string().nullable().optional(),
+  purchase_cost: z.number().int().min(0).nullable().optional(),
+  estimated_value: z.number().int().min(0).nullable().optional(),
   purchase_or_build_date: z.string().nullable().optional(),
   production_cost: z.number().int().min(0).nullable().optional(),
   replacement_value: z.number().int().min(0).nullable().optional(),
@@ -36,6 +45,7 @@ const repairSchema = z.object({
   inventory_item_id: z.string().uuid(),
   date_reported: z.string().optional(),
   problem: z.string().trim().min(1),
+  incident_type: z.enum(['damage','lost','repair','cleaning']).optional(),
   status: z.enum(['PENDING', 'IN_PROGRESS', 'DONE', 'NOT_REPAIRABLE']).default('PENDING'),
   estimated_cost: z.number().int().min(0).nullable().optional(),
   actual_cost: z.number().int().min(0).nullable().optional(),
@@ -90,15 +100,15 @@ export async function GET() {
   const totalUnits = items.filter(i => i.status !== 'RETIRED').length;
   const availableUnits = items.filter(i => i.status === 'AVAILABLE').length;
   const reservedUnits = items.filter(i => i.status === 'RESERVED').length;
-  const outUnits = items.filter(i => i.status === 'OUT').length;
+  const outUnits = items.filter(i => ['OUT','RENTED'].includes(i.status)).length;
   const repairUnits = items.filter(i => i.status === 'REPAIR').length;
   const cleaningUnits = items.filter(i => i.status === 'CLEANING').length;
   const lostUnits = items.filter(i => i.status === 'LOST').length;
 
-  const totalInventoryValue = concepts.reduce((acc, c) => acc + (c.replacement_value || c.production_cost || 0) * (c.total_units || 0), 0);
+  const totalInventoryValue = items.reduce((acc, i) => acc + (i.estimated_value ?? 0), 0);
   const totalRepairCost = repairs.reduce((acc, r) => acc + (r.actual_cost ?? 0), 0);
 
-  const attentionItems = items.filter(i => ['REPAIR', 'CLEANING', 'LOST'].includes(i.status) || !i.location || i.condition === 'DAMAGED').map(i => {
+  const attentionItems = items.filter(i => ['REPAIR', 'CLEANING', 'LOST'].includes(i.status) || !i.location || ['DAMAGED','UNCHECKED'].includes(i.condition)).map(i => {
     const concept = concepts.find(c => c.id === i.concept_id);
     const activeRepair = repairs.find(r => r.inventory_item_id === i.id && ['PENDING', 'IN_PROGRESS'].includes(r.status));
     return {
@@ -110,7 +120,7 @@ export async function GET() {
       status: i.status,
       condition: i.condition,
       location: i.location || 'Sin ubicación',
-      issue: i.status === 'REPAIR' ? `Reparación: ${activeRepair?.problem || 'Pendiente'}` : i.status === 'CLEANING' ? 'Limpieza pendiente' : i.status === 'LOST' ? 'Unidad perdida' : !i.location ? 'Sin ubicación asignada' : 'Dañado',
+      issue: i.status === 'REPAIR' ? `Reparación: ${activeRepair?.problem || 'Pendiente'}` : i.status === 'CLEANING' ? 'Limpieza pendiente' : i.status === 'LOST' ? 'Unidad perdida' : !i.location ? 'Sin ubicación asignada' : i.condition === 'UNCHECKED' ? 'Por revisar' : 'Dañado',
     };
   });
 
@@ -158,6 +168,8 @@ export async function POST(req: Request) {
 
     if (c.id) {
       const {data, error} = await supabase.from('inventory_concepts').update({
+        subcategory: c.subcategory, family: c.family, owner_name: c.owner_name,
+        review_status: c.review_status, performer_price: c.performer_price, active: c.active,
         name: c.name,
         category: c.category,
         description: c.description,
@@ -174,6 +186,8 @@ export async function POST(req: Request) {
     } else {
       const {data, error} = await supabase.from('inventory_concepts').insert({
         organization_id: orgId,
+        subcategory: c.subcategory, family: c.family, owner_name: c.owner_name,
+        review_status: c.review_status, performer_price: c.performer_price, active: c.active,
         name: c.name,
         category: c.category,
         description: c.description,
@@ -196,6 +210,7 @@ export async function POST(req: Request) {
 
     if (item.id) {
       const {data, error} = await supabase.from('inventory_items').update({
+        sublocation: item.sublocation, purchase_cost: item.purchase_cost, estimated_value: item.estimated_value,
         item_code: item.item_code,
         name: item.name,
         size: item.size,
@@ -215,6 +230,7 @@ export async function POST(req: Request) {
       const {data, error} = await supabase.from('inventory_items').insert({
         organization_id: orgId,
         concept_id: item.concept_id,
+        sublocation: item.sublocation, purchase_cost: item.purchase_cost, estimated_value: item.estimated_value,
         item_code: item.item_code,
         name: item.name,
         size: item.size,
@@ -239,6 +255,7 @@ export async function POST(req: Request) {
 
     if (rep.id) {
       const {data, error} = await supabase.from('inventory_repairs').update({
+        incident_type: rep.incident_type,
         problem: rep.problem,
         status: rep.status,
         estimated_cost: rep.estimated_cost,
@@ -252,18 +269,13 @@ export async function POST(req: Request) {
       }).eq('id', rep.id).eq('organization_id', orgId).select().single();
       if (error) return NextResponse.json({error: error.message}, {status: 500});
 
-      if (['PENDING', 'IN_PROGRESS'].includes(rep.status)) {
-        await supabase.from('inventory_items').update({status: 'REPAIR', location: 'Taller / Reparación'}).eq('id', rep.inventory_item_id).eq('organization_id', orgId);
-      } else if (rep.status === 'DONE') {
-        await supabase.from('inventory_items').update({status: 'AVAILABLE', location: 'Ibiza Warehouse'}).eq('id', rep.inventory_item_id).eq('organization_id', orgId);
-      }
-
       return NextResponse.json({data});
     } else {
       const {data, error} = await supabase.from('inventory_repairs').insert({
         organization_id: orgId,
         inventory_item_id: rep.inventory_item_id,
         date_reported: rep.date_reported || new Date().toISOString().slice(0, 10),
+        incident_type: rep.incident_type,
         problem: rep.problem,
         status: rep.status,
         estimated_cost: rep.estimated_cost,
@@ -276,10 +288,6 @@ export async function POST(req: Request) {
       }).select().single();
       if (error) return NextResponse.json({error: error.message}, {status: 500});
 
-      if (['PENDING', 'IN_PROGRESS'].includes(rep.status)) {
-        await supabase.from('inventory_items').update({status: 'REPAIR', location: 'Taller / Reparación'}).eq('id', rep.inventory_item_id).eq('organization_id', orgId);
-      }
-
       return NextResponse.json({data});
     }
   }
@@ -289,85 +297,19 @@ export async function POST(req: Request) {
     if (!parse.success) return NextResponse.json({error: 'Datos de asignación no válidos.'}, {status: 400});
     const alloc = parse.data;
 
-    const {data: targetEvent} = await supabase.from('events').select('id, event_name, event_date').eq('id', alloc.event_id).eq('organization_id', orgId).single();
-    if (!targetEvent) return NextResponse.json({error: 'Evento no encontrado.'}, {status: 404});
-
-    const {data: concept} = await supabase.from('inventory_concepts').select('id, name, total_units').eq('id', alloc.concept_id).eq('organization_id', orgId).single();
-    if (!concept) return NextResponse.json({error: 'Concepto de inventario no encontrado.'}, {status: 404});
-
-    const {data: physicalItems} = await supabase.from('inventory_items').select('id, status').eq('concept_id', alloc.concept_id).eq('organization_id', orgId);
-    const availableCount = (physicalItems || []).filter(i => ['AVAILABLE', 'RESERVED'].includes(i.status)).length;
-    const requested = alloc.quantity;
-
-    let warning: string | null = null;
-    let conflict = false;
-
-    if (targetEvent.event_date) {
-      const {data: overlappingEvents} = await supabase.from('events').select('id').eq('organization_id', orgId).eq('event_date', targetEvent.event_date).is('deleted_at', null);
-      const overlappingIds = (overlappingEvents || []).map(e => e.id);
-
-      if (overlappingIds.length > 0) {
-        const {data: activeAllocations} = await supabase.from('inventory_event_allocations').select('quantity').eq('organization_id', orgId).eq('concept_id', alloc.concept_id).in('event_id', overlappingIds).neq('status', 'CANCELLED');
-        const alreadyAllocated = (activeAllocations || []).reduce((sum, a) => sum + (a.quantity || 1), 0);
-        const totalNeeded = alreadyAllocated + requested;
-
-        if (totalNeeded > availableCount) {
-          conflict = true;
-          warning = `⚠ ALERTA DE CONFLICTO: ${concept.name} (${availableCount} disponibles / ${totalNeeded} necesarias para la fecha ${targetEvent.event_date}).`;
-        }
-      }
-    } else if (requested > availableCount) {
-      conflict = true;
-      warning = `⚠ ALERTA DE CONFLICTO: ${concept.name} (${availableCount} disponibles / ${requested} necesarias).`;
-    }
-
-    if (alloc.id) {
-      const {data, error} = await supabase.from('inventory_event_allocations').update({
-        quantity: alloc.quantity,
-        inventory_item_id: alloc.inventory_item_id,
-        status: alloc.status,
-        rental_revenue: alloc.rental_revenue,
-        notes: alloc.notes,
-        updated_at: new Date().toISOString(),
-      }).eq('id', alloc.id).eq('organization_id', orgId).select().single();
-      if (error) return NextResponse.json({error: error.message}, {status: 500});
-
-      if (alloc.inventory_item_id) {
-        if (alloc.status === 'OUT') {
-          await supabase.from('inventory_items').update({status: 'OUT', location: 'Evento', last_event_id: alloc.event_id, last_used_at: new Date().toISOString()}).eq('id', alloc.inventory_item_id).eq('organization_id', orgId);
-        } else if (alloc.status === 'RETURNED') {
-          const nextStatus = alloc.return_item_status || 'AVAILABLE';
-          await supabase.from('inventory_items').update({status: nextStatus, location: nextStatus === 'AVAILABLE' ? 'Ibiza Warehouse' : 'Taller / Reparación'}).eq('id', alloc.inventory_item_id).eq('organization_id', orgId);
-        }
-      }
-
-      return NextResponse.json({data, conflict, warning});
-    } else {
-      const {data, error} = await supabase.from('inventory_event_allocations').insert({
-        organization_id: orgId,
-        event_id: alloc.event_id,
-        concept_id: alloc.concept_id,
-        inventory_item_id: alloc.inventory_item_id,
-        quantity: alloc.quantity,
-        status: alloc.status || 'RESERVED',
-        rental_revenue: alloc.rental_revenue,
-        notes: alloc.notes,
-      }).select().single();
-      if (error) return NextResponse.json({error: error.message}, {status: 500});
-
-      if (alloc.inventory_item_id && alloc.status === 'OUT') {
-        await supabase.from('inventory_items').update({status: 'OUT', location: 'Evento', last_event_id: alloc.event_id, last_used_at: new Date().toISOString()}).eq('id', alloc.inventory_item_id).eq('organization_id', orgId);
-      }
-
-      return NextResponse.json({data, conflict, warning});
-    }
+    const {data, error} = await supabase.rpc('save_inventory_allocation', {target_org: orgId, payload: alloc});
+    if (error) return NextResponse.json({error: error.message}, {status: 409});
+    return NextResponse.json({data});
   }
 
   if (action === 'deleteAllocation') {
-    const {id} = body;
-    if (!id || typeof id !== 'string') return NextResponse.json({error: 'ID de asignación no válido.'}, {status: 400});
-    const {error} = await supabase.from('inventory_event_allocations').delete().eq('id', id).eq('organization_id', orgId);
-    if (error) return NextResponse.json({error: error.message}, {status: 500});
+    const parsed = z.string().uuid().safeParse(body.id);
+    if (!parsed.success) return NextResponse.json({error: 'ID no válido.'}, {status: 400});
+    const {data: allocation, error: readError} = await supabase.from('inventory_event_allocations')
+      .select('*').eq('id', parsed.data).eq('organization_id', orgId).single();
+    if (readError || !allocation) return NextResponse.json({error: 'Asignación no encontrada.'}, {status: 404});
+    const {error} = await supabase.rpc('save_inventory_allocation', {target_org: orgId, payload: {...allocation, status: 'CANCELLED'}});
+    if (error) return NextResponse.json({error: error.message}, {status: 409});
     return NextResponse.json({ok: true});
   }
 
