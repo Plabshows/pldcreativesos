@@ -172,6 +172,15 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
     });
   }, [concepts, items, search, catFilter, locFilter, statusFilter, familyFilter]);
 
+  function parseMoneyInput(val: FormDataEntryValue | null): number | null {
+    if (val == null) return null;
+    const str = String(val).trim();
+    if (str === '') return null;
+    const num = Number(str.replace(',', '.'));
+    if (isNaN(num) || num < 0) return null;
+    return Math.round(num * 100);
+  }
+
   async function saveConcept(formData: FormData) {
     if (saving) return;
     setSaving(true);
@@ -180,9 +189,9 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
     const category = String(formData.get('category') || 'Other') as Concept['category'];
     const description = String(formData.get('description') || '').trim() || null;
     const default_location = String(formData.get('default_location') || 'Ibiza Warehouse').trim();
-    const suggested_rental_price = formData.get('suggested_rental_price') ? Math.round(Number(formData.get('suggested_rental_price')) * 100) : null;
-    const production_cost = formData.get('production_cost') ? Math.round(Number(formData.get('production_cost')) * 100) : null;
-    const replacement_value = formData.get('replacement_value') ? Math.round(Number(formData.get('replacement_value')) * 100) : null;
+    const suggested_rental_price = parseMoneyInput(formData.get('suggested_rental_price'));
+    const production_cost = parseMoneyInput(formData.get('production_cost'));
+    const replacement_value = parseMoneyInput(formData.get('replacement_value'));
     const main_image = String(formData.get('main_image') || '').trim() || null;
     const notes = String(formData.get('notes') || '').trim() || null;
 
@@ -199,7 +208,7 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
             owner_name: String(formData.get('owner_name') || '').trim() || null,
             review_status: String(formData.get('review_status') || '').trim() || null,
             active: formData.get('active') === 'true',
-            performer_price: formData.get('performer_price') ? Math.round(Number(formData.get('performer_price')) * 100) : null,
+            performer_price: parseMoneyInput(formData.get('performer_price')),
             name, category, description, default_location, suggested_rental_price, production_cost, replacement_value, main_image, notes
           }
         })
@@ -223,9 +232,10 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
     const item_code = String(formData.get('item_code') || '').trim();
     const name = String(formData.get('name') || '').trim() || null;
     const size = String(formData.get('size') || '').trim() || null;
-    const condition = String(formData.get('condition') || 'GOOD') as Item['condition'];
+    const condition = String(formData.get('condition') || 'UNCHECKED') as Item['condition'];
     const status = String(formData.get('status') || 'AVAILABLE') as Item['status'];
-    const location = String(formData.get('location') || 'Ibiza Warehouse').trim();
+    const location = String(formData.get('location') || 'Ibiza Warehouse').trim() || 'Ibiza Warehouse';
+    const rawDate = String(formData.get('purchase_or_build_date') || '').trim();
 
     try {
       const r = await fetch('/api/inventory', {
@@ -236,12 +246,18 @@ export function InventoryWorkspace({query = ''}: {query?: string}) {
           item: {
             id: editingItem?.id,
             sublocation: String(formData.get('sublocation') || '').trim() || null,
-            purchase_cost: formData.get('purchase_cost') ? Math.round(Number(formData.get('purchase_cost')) * 100) : null,
-            estimated_value: formData.get('estimated_value') ? Math.round(Number(formData.get('estimated_value')) * 100) : null,
-            concept_id: conceptId, item_code, name, size, condition, status, location,
-            purchase_or_build_date: formData.get('purchase_or_build_date') || null,
-            production_cost: formData.get('production_cost') ? Math.round(Number(formData.get('production_cost')) * 100) : null,
-            replacement_value: formData.get('replacement_value') ? Math.round(Number(formData.get('replacement_value')) * 100) : null,
+            purchase_cost: parseMoneyInput(formData.get('purchase_cost')),
+            estimated_value: parseMoneyInput(formData.get('estimated_value')),
+            concept_id: conceptId,
+            item_code,
+            name,
+            size,
+            condition,
+            status,
+            location,
+            purchase_or_build_date: rawDate || null,
+            production_cost: parseMoneyInput(formData.get('production_cost')),
+            replacement_value: parseMoneyInput(formData.get('replacement_value')),
             main_image: String(formData.get('main_image') || '').trim() || null,
             notes: String(formData.get('notes') || '').trim() || null
           }

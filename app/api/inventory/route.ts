@@ -28,7 +28,7 @@ const itemSchema = z.object({
   name: z.string().nullable().optional(),
   size: z.string().nullable().optional(),
   condition: z.enum(['NEW', 'EXCELLENT', 'GOOD', 'USED', 'DAMAGED', 'UNCHECKED']).default('UNCHECKED'),
-  status: z.enum(['AVAILABLE', 'RESERVED', 'OUT', 'REPAIR', 'CLEANING', 'LOST', 'RETIRED']).default('AVAILABLE'),
+  status: z.enum(['RENTED', 'AVAILABLE', 'RESERVED', 'OUT', 'REPAIR', 'CLEANING', 'LOST', 'RETIRED']).default('AVAILABLE'),
   location: z.string().nullable().optional(),
   sublocation: z.string().nullable().optional(),
   purchase_cost: z.number().int().min(0).nullable().optional(),
@@ -163,7 +163,10 @@ export async function POST(req: Request) {
 
   if (action === 'saveConcept') {
     const parse = conceptSchema.safeParse(body.concept);
-    if (!parse.success) return NextResponse.json({error: 'Datos del concepto no válidos.'}, {status: 400});
+    if (!parse.success) {
+      const details = parse.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ');
+      return NextResponse.json({error: `Datos del concepto no válidos: ${details}`}, {status: 400});
+    }
     const c = parse.data;
 
     if (c.id) {
@@ -205,7 +208,10 @@ export async function POST(req: Request) {
 
   if (action === 'saveItem') {
     const parse = itemSchema.safeParse(body.item);
-    if (!parse.success) return NextResponse.json({error: 'Datos de la unidad no válidos.'}, {status: 400});
+    if (!parse.success) {
+      const details = parse.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ');
+      return NextResponse.json({error: `Datos de la unidad no válidos: ${details}`}, {status: 400});
+    }
     const item = parse.data;
 
     if (item.id) {
