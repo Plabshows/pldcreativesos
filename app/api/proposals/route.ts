@@ -1,3 +1,4 @@
+import {commercialShow} from '@/lib/show-commercial';
 import {NextResponse} from 'next/server';
 import {z} from 'zod';
 import {requireOrganization} from '@/lib/server/auth';
@@ -6,7 +7,7 @@ import {rows,workspaceReferences} from '@/lib/server/workspace-data';
 const requestSchema=z.object({id:z.uuid(),version:z.number().int().positive().optional(),action:z.enum(['save','archive','restore','create_event']).default('save'),fields:proposalSchema.optional()});
 export async function GET(){
  const a=await requireOrganization();if('error'in a)return a.error;
- try{const [data,refs]=await Promise.all([rows(a.supabase,a.membership.organization_id,'proposals'),workspaceReferences(a.supabase,a.membership.organization_id)]);return NextResponse.json({data:data.map(r=>({...r.document as object,id:r.id,proposal_code:r.proposal_code,event_id:r.event_id,version:r.version,updated_at:r.updated_at,deleted_at:r.deleted_at,status:r.status})),refs,canEdit:['admin','producer','sales'].includes(a.membership.role)});}
+ try{const [data,refs]=await Promise.all([rows(a.supabase,a.membership.organization_id,'proposals'),workspaceReferences(a.supabase,a.membership.organization_id)]);const sales:{show_id:string;document:{fields?:Record<string,string>}}[]=[];for(let offset=0;;offset+=500){const result=await a.supabase.from('show_kit_sections').select('show_id,document').eq('organization_id',a.membership.organization_id).eq('section','sales').order('show_id').range(offset,offset+499);if(result.error)throw result.error;sales.push(...result.data);if(result.data.length<500)break;}refs.shows=refs.shows.map(show=>commercialShow(show as typeof show & {name:string},sales.find(s=>s.show_id===show.id)?.document?.fields||{}));return NextResponse.json({data:data.map(r=>({...r.document as object,id:r.id,proposal_code:r.proposal_code,event_id:r.event_id,version:r.version,updated_at:r.updated_at,deleted_at:r.deleted_at,status:r.status})),refs,canEdit:['admin','producer','sales'].includes(a.membership.role)});}
  catch{return NextResponse.json({error:'No se pudieron cargar las propuestas y su catálogo. Reintenta la conexión.'},{status:503});}
 }
 export async function POST(req:Request){

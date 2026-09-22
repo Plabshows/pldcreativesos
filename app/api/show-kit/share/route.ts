@@ -26,3 +26,10 @@ export async function POST(req:Request){
  if(saved.error)return Response.json({error:'No se pudo crear el enlace.'},{status:400});
  return Response.json({id:saved.data.id,path:'/brief/'+saved.data.token,expires_at:saved.data.expires_at});
 }
+
+export async function GET(req:Request){
+ const a=await requireOrganization();if('error'in a)return a.error;
+ const id=new URL(req.url).searchParams.get('show');if(!z.uuid().safeParse(id).success)return Response.json({error:'Show no válido.'},{status:400});
+ const result=[];for(let offset=0;;offset+=500){const r=await a.supabase.from('show_kit_shares').select('id,token,audience,created_at,expires_at,revoked_at').eq('organization_id',a.membership.organization_id).eq('show_id',id).order('created_at',{ascending:false}).order('id').range(offset,offset+499);if(r.error)return Response.json({error:'No se pudieron cargar los enlaces.'},{status:503});result.push(...r.data);if(r.data.length<500)break;}
+ return Response.json({links:result},{headers:{'Cache-Control':'no-store'}});
+}

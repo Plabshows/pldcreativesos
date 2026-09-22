@@ -21,6 +21,8 @@ Seleccionar un artista del evento y generar su brief crea una instantánea del s
 
 RLS protege las filas, no solo la interfaz. Las tablas nuevas no conceden acceso anónimo. La única función anónima devuelve una instantánea por token válido y no revocado. Los enlaces son credenciales por posesión: cualquier receptor del enlace puede ver esa instantánea hasta su caducidad. No enviamos mensajes automáticamente.
 
+Los enlaces emitidos se recuperan desde el historial de la ficha, incluidos los caducados y revocados. Las propuestas nuevas usan el nombre y descripción comerciales guardados; los presupuestos existentes conservan sus textos.
+
 ## QR
 
 Las fichas conservan identificadores estables y las piezas tienen referencia a concepto, caja y asset interno. La ruta interna `/?show=<UUID>#shows` abre la ficha con permisos del usuario; se puede codificar posteriormente en QR. No utilizar tokens temporales como etiquetas permanentes de almacén. No se han generado QR ni contenidos ficticios.
@@ -28,7 +30,7 @@ Las fichas conservan identificadores estables y las piezas tienen referencia a c
 ## Limitaciones de esta fase
 
 - Los URLs de medios deben ser accesibles al receptor; la descarga depende de las condiciones/CORS del proveedor externo. No hay descarga ZIP.
-- PDF textual; imagen técnica guardada como URL, todavía no incrustada en el PDF.
+- PDF con imagen JPG/PNG desde una URL HTTPS pública de hasta 5 MB. Una imagen inaccesible produce un aviso y no se omite silenciosamente.
 - El QR por caja y el seguimiento histórico detallado de mantenimiento siguen utilizando la futura vinculación de identificadores y el módulo de inventario existente; no se duplica el registro de reparaciones.
 - No se ha desplegado la aplicación. En local, los enlaces compartidos son localhost: solo serán utilizables desde fuera tras el despliegue.
 
