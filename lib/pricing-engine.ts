@@ -309,7 +309,7 @@ export function calculateOptionPricing(
     0
   );
 
-  let rawSaleCents = linePricesSumCents > 0 ? linePricesSumCents : recommendedSalePriceCents;
+  let rawSaleCents = option.recommended_price_cents != null ? option.recommended_price_cents : (linePricesSumCents > 0 ? linePricesSumCents : recommendedSalePriceCents);
   if (option.discount_cents) {
     rawSaleCents = Math.max(0, rawSaleCents - option.discount_cents);
   }
