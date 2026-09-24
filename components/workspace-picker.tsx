@@ -38,10 +38,21 @@ export function WorkspacePicker() {
       });
       const data = await responseJson(r);
       if (!r.ok) throw new Error(data.error);
-      window.location.assign('/');
+      window.location.href = '/';
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo cambiar el espacio.');
       setBusy(false);
+    }
+  }
+
+  async function resetToMain() {
+    setBusy(true);
+    setError('');
+    try {
+      await fetch('/api/workspaces', { method: 'DELETE' });
+      window.location.href = '/';
+    } catch {
+      window.location.reload();
     }
   }
 
@@ -59,11 +70,11 @@ export function WorkspacePicker() {
     <section style={{marginBottom: 20, background: 'rgba(255,255,255,0.05)', padding: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)'}}>
       <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6}}>
         <span style={{fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#94a3b8', letterSpacing: 0.5}}>Espacio de trabajo</span>
-        {isSecondary && mainSpace && (
+        {isSecondary && (
           <button
             disabled={busy}
             style={{border: 0, background: 'none', color: '#60a5fa', cursor: 'pointer', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4, padding: 0}}
-            onClick={() => void send('PUT', {workspaceId: mainSpace.id})}
+            onClick={() => void resetToMain()}
             title="Volver a Performance Lab principal"
           >
             <RefreshCw size={11}/> Ir a Principal
@@ -75,7 +86,13 @@ export function WorkspacePicker() {
         aria-label="Espacio de trabajo activo"
         value={active}
         disabled={busy}
-        onChange={e => void send('PUT', {workspaceId: e.target.value})}
+        onChange={e => {
+          if (!e.target.value) {
+            void resetToMain();
+          } else {
+            void send('PUT', {workspaceId: e.target.value});
+          }
+        }}
         style={{
           width: '100%',
           padding: '8px 10px',
@@ -88,13 +105,25 @@ export function WorkspacePicker() {
           cursor: 'pointer'
         }}
       >
-        {!active && <option value="">Selecciona un espacio</option>}
         {spaces.map(s => (
           <option key={s.id} value={s.id}>
             {s.name} {s.name === 'Performance Lab' ? ' (Principal)' : ''}
           </option>
         ))}
       </select>
+
+      {isSecondary && (
+        <div style={{marginTop: 8, background: '#1e3a8a', border: '1px solid #3b82f6', borderRadius: 6, padding: '8px 10px', fontSize: 11, color: '#dbeafe'}}>
+          <span style={{fontWeight: 600, display: 'block', marginBottom: 4}}>Estás en el espacio secundario: <strong>{activeSpace?.name}</strong></span>
+          <button
+            disabled={busy}
+            style={{border: 0, background: '#2563eb', color: '#ffffff', cursor: 'pointer', fontSize: 11, fontWeight: 700, padding: '4px 8px', borderRadius: 4, width: '100%'}}
+            onClick={() => void resetToMain()}
+          >
+            ⚡ Volver al Espacio Principal (Performance Lab)
+          </button>
+        </div>
+      )}
 
       <button
         type="button"
