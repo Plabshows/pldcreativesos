@@ -967,10 +967,13 @@ export function ProposalsWorkspace({ query = '' }: { query?: string }) {
                       {activeOption?.lines.map((l, idx) => {
                         const bd = activePricing.lineBreakdowns[idx] || calculateLineCost(l, settings);
                         const qty = Math.max(1, (l.quantity || 1) * (l.units || 1));
+                        const unitCostCents = Math.round(bd.totalRealCostCents / qty);
+                        const target40TotalCents = Math.round(bd.totalRealCostCents / (1 - 0.40));
+                        const unitTarget40Cents = Math.round(target40TotalCents / qty);
+
                         const lineSaleCents = (l.unit_price_cents ?? 0) * qty;
                         const lineProfitCents = lineSaleCents - bd.totalRealCostCents;
                         const lineMarginPercent = lineSaleCents > 0 ? (lineProfitCents / lineSaleCents) * 100 : 0;
-                        const target40SaleCents = Math.round(bd.totalRealCostCents / (1 - 0.40));
 
                         return (
                           <div
@@ -996,19 +999,21 @@ export function ProposalsWorkspace({ query = '' }: { query?: string }) {
                               </span>
                             </div>
 
-                            <div style={{ fontSize: '12px', minWidth: '110px' }}>
-                              <span style={{ color: '#64748b', display: 'block' }}>Coste Real Interno</span>
-                              <strong style={{ fontSize: '15px', color: '#334155' }}>{money(bd.totalRealCostCents)}</strong>
-                            </div>
-
                             <div style={{ fontSize: '12px', minWidth: '120px' }}>
-                              <span style={{ color: '#64748b', display: 'block' }}>Propuesto 40% Target</span>
-                              <span style={{ fontSize: '14px', fontWeight: 600, color: '#16a34a' }}>{money(target40SaleCents)}</span>
+                              <span style={{ color: '#64748b', display: 'block' }}>Coste Real / Unidad</span>
+                              <strong style={{ fontSize: '15px', color: '#334155', display: 'block' }}>{money(unitCostCents)} / un.</strong>
+                              {qty > 1 && <small style={{ display: 'block', color: '#64748b', fontSize: '10px' }}>Total: {money(bd.totalRealCostCents)}</small>}
                             </div>
 
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ fontSize: '12px', minWidth: '130px' }}>
+                              <span style={{ color: '#64748b', display: 'block' }}>Target 40% / Unidad</span>
+                              <span style={{ fontSize: '14px', fontWeight: 700, color: '#16a34a', display: 'block' }}>{money(unitTarget40Cents)} / un.</span>
+                              {qty > 1 && <small style={{ display: 'block', color: '#64748b', fontSize: '10px' }}>Total: {money(target40TotalCents)}</small>}
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
                               <label style={{ fontSize: '11px', fontWeight: 700, color: '#475569', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                Precio Venta Unidad (€)
+                                Precio Venta / Unidad (€)
                                 <input
                                   type="number"
                                   min={0}
@@ -1024,13 +1029,21 @@ export function ProposalsWorkspace({ query = '' }: { query?: string }) {
                                   style={{ width: '95px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #94a3b8', fontWeight: 700, textAlign: 'right', fontSize: '13px' }}
                                 />
                               </label>
+                              {qty > 1 && lineSaleCents > 0 && (
+                                <small style={{ color: '#475569', fontSize: '10px', fontWeight: 600 }}>Total venta: {money(lineSaleCents)}</small>
+                              )}
                             </div>
 
                             <div style={{ textAlign: 'right', minWidth: '130px' }}>
                               <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>Margen esta partida</span>
-                              <strong style={{ fontSize: '14px', color: lineMarginPercent >= 30 ? '#15803d' : lineSaleCents > 0 ? '#b91c1c' : '#64748b' }}>
-                                {lineSaleCents > 0 ? `${lineMarginPercent.toFixed(1)}% (${money(lineProfitCents)})` : 'Por definir'}
+                              <strong style={{ fontSize: '14px', color: lineMarginPercent >= 30 ? '#15803d' : lineSaleCents > 0 ? '#b91c1c' : '#64748b', display: 'block' }}>
+                                {lineSaleCents > 0 ? `${lineMarginPercent.toFixed(1)}%` : 'Por definir'}
                               </strong>
+                              {lineSaleCents > 0 && (
+                                <small style={{ display: 'block', color: lineProfitCents >= 0 ? '#15803d' : '#b91c1c', fontSize: '11px', fontWeight: 600 }}>
+                                  +{money(lineProfitCents)} beneficio
+                                </small>
+                              )}
                             </div>
                           </div>
                         );
