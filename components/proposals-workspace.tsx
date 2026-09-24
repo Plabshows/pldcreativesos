@@ -21,7 +21,7 @@ import {
   type QuoteLine,
   type QuoteOption,
 } from '@/lib/proposals';
-import { calculateOptionPricing, type OptionPricingResult } from '@/lib/pricing-engine';
+import { calculateOptionPricing, calculateLineCost, type OptionPricingResult } from '@/lib/pricing-engine';
 import { defaultPricingSettings, type PricingSettings } from '@/lib/pricing-settings';
 import { generateWhatsAppMessage, generateEmailMessage } from '@/lib/proposal-outputs';
 import { PricingSettingsDialog } from './pricing-settings-dialog';
@@ -319,11 +319,17 @@ export function ProposalsWorkspace({ query = '' }: { query?: string }) {
         const unitPrice = Math.round(targetPrice / qty);
         updatedLines = [{ ...line, unit_price_cents: unitPrice, reference: false }];
       } else if (linesCount > 1) {
-        const totalQty = o.lines.reduce((s, l) => s + Math.max(1, (l.quantity || 1) * (l.units || 1)), 0);
-        updatedLines = o.lines.map(l => {
+        const lineRealCosts = o.lines.map(l => {
+          const bd = calculateLineCost(l, settings);
+          return Math.max(1, bd.totalRealCostCents);
+        });
+        const totalRealCost = lineRealCosts.reduce((a, b) => a + b, 0);
+
+        updatedLines = o.lines.map((l, idx) => {
           const qty = Math.max(1, (l.quantity || 1) * (l.units || 1));
-          const lineShare = Math.round((targetPrice * qty) / totalQty);
-          const unitPrice = Math.round(lineShare / qty);
+          const lineCostShare = lineRealCosts[idx] / totalRealCost;
+          const lineTargetSaleCents = Math.round(targetPrice * lineCostShare);
+          const unitPrice = Math.round(lineTargetSaleCents / qty);
           return { ...l, unit_price_cents: unitPrice, reference: false };
         });
       }
@@ -821,9 +827,66 @@ export function ProposalsWorkspace({ query = '' }: { query?: string }) {
                         </div>
                       ))}
 
-                      <button onClick={() => field('options', q.options.map(x => (x.id === o.id ? { ...x, lines: [...x.lines, newLine()] } : x)))}>
-                        + Añadir concepto o partida
-                      </button>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '14px' }}>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => {
+                            const line = {
+                              ...newLine(),
+                              label: 'Bailarín / Performer',
+                              concept_type: 'dancer' as const,
+                              hiring_type: 'cooperative' as const,
+                              net_fee_performer_cents: 12000,
+                            };
+                            field('options', q.options.map(x => (x.id === o.id ? { ...x, lines: [...x.lines, line] } : x)));
+                          }}
+                        >
+                          + Bailarín (120 € neto)
+                        </button>
+
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => {
+                            const line = {
+                              ...newLine(),
+                              label: 'Músico Saxo / Solista',
+                              concept_type: 'musician' as const,
+                              hiring_type: 'cooperative' as const,
+                              net_fee_performer_cents: 18000,
+                            };
+                            field('options', q.options.map(x => (x.id === o.id ? { ...x, lines: [...x.lines, line] } : x)));
+                          }}
+                        >
+                          + Saxo / Músico (180 € neto)
+                        </button>
+
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => {
+                            const line = {
+                              ...newLine(),
+                              label: 'Show Circo / Fuego',
+                              concept_type: 'fire' as const,
+                              hiring_type: 'cooperative' as const,
+                              net_fee_performer_cents: 25000,
+                            };
+                            field('options', q.options.map(x => (x.id === o.id ? { ...x, lines: [...x.lines, line] } : x)));
+                          }}
+                        >
+                          + Fuego / Circo (250 € neto)
+                        </button>
+
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => field('options', q.options.map(x => (x.id === o.id ? { ...x, lines: [...x.lines, newLine()] } : x)))}
+                        >
+                          + Concepto Personalizado
+                        </button>
+                      </div>
                     </section>
                   ))}
 
@@ -886,6 +949,92 @@ export function ProposalsWorkspace({ query = '' }: { query?: string }) {
                         <span style={{ color: '#334155', display: 'block', fontWeight: 600 }}>COSTE REAL TOTAL</span>
                         <strong style={{ fontSize: '18px', color: '#0f172a' }}>{money(activePricing.totalRealCostCents)}</strong>
                       </div>
+                    </div>
+                  </section>
+
+                  {/* Line-by-Line Breakdown for Distinct Artists/Services */}
+                  <section style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '12px', padding: '18px', marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: '15px', color: '#0f172a' }}>🎭 DESGLOSE Y PRECIO INDIVIDUAL POR CADA ARTISTA / PARTIDA</h3>
+                        <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#64748b' }}>
+                          Cada artista puede tener un caché y precio distinto (ej: Saxo vs. Bailarines). Ajusta aquí la venta de cada uno.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {activeOption?.lines.map((l, idx) => {
+                        const bd = activePricing.lineBreakdowns[idx] || calculateLineCost(l, settings);
+                        const qty = Math.max(1, (l.quantity || 1) * (l.units || 1));
+                        const lineSaleCents = (l.unit_price_cents ?? 0) * qty;
+                        const lineProfitCents = lineSaleCents - bd.totalRealCostCents;
+                        const lineMarginPercent = lineSaleCents > 0 ? (lineProfitCents / lineSaleCents) * 100 : 0;
+                        const target40SaleCents = Math.round(bd.totalRealCostCents / (1 - 0.40));
+
+                        return (
+                          <div
+                            key={l.id}
+                            style={{
+                              background: '#f8fafc',
+                              border: '1px solid #e2e8f0',
+                              borderRadius: '10px',
+                              padding: '14px',
+                              display: 'flex',
+                              flexWrap: 'wrap',
+                              gap: '14px',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                            }}
+                          >
+                            <div style={{ minWidth: '180px', flex: 1 }}>
+                              <strong style={{ fontSize: '14px', color: '#0f172a', display: 'block' }}>
+                                {l.label || `Partida ${idx + 1}`}
+                              </strong>
+                              <span style={{ fontSize: '11px', color: '#64748b' }}>
+                                {l.quantity} × {conceptTypes.find(c => c[0] === (l.concept_type || 'character'))?.[1] || l.concept_type || 'Artista'} · {l.net_fee_performer_cents ? `${money(l.net_fee_performer_cents)} neto/persona` : 'Neto por definir'}
+                              </span>
+                            </div>
+
+                            <div style={{ fontSize: '12px', minWidth: '110px' }}>
+                              <span style={{ color: '#64748b', display: 'block' }}>Coste Real Interno</span>
+                              <strong style={{ fontSize: '15px', color: '#334155' }}>{money(bd.totalRealCostCents)}</strong>
+                            </div>
+
+                            <div style={{ fontSize: '12px', minWidth: '120px' }}>
+                              <span style={{ color: '#64748b', display: 'block' }}>Propuesto 40% Target</span>
+                              <span style={{ fontSize: '14px', fontWeight: 600, color: '#16a34a' }}>{money(target40SaleCents)}</span>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <label style={{ fontSize: '11px', fontWeight: 700, color: '#475569', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                Precio Venta Unidad (€)
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="1"
+                                  placeholder="0"
+                                  value={l.unit_price_cents == null ? '' : l.unit_price_cents / 100}
+                                  onChange={e => {
+                                    const val = e.target.value === '' ? null : Math.round(Number(e.target.value) * 100);
+                                    if (activeOption) {
+                                      lineField(activeOption.id, l.id, { unit_price_cents: val, reference: false });
+                                    }
+                                  }}
+                                  style={{ width: '95px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #94a3b8', fontWeight: 700, textAlign: 'right', fontSize: '13px' }}
+                                />
+                              </label>
+                            </div>
+
+                            <div style={{ textAlign: 'right', minWidth: '130px' }}>
+                              <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>Margen esta partida</span>
+                              <strong style={{ fontSize: '14px', color: lineMarginPercent >= 30 ? '#15803d' : lineSaleCents > 0 ? '#b91c1c' : '#64748b' }}>
+                                {lineSaleCents > 0 ? `${lineMarginPercent.toFixed(1)}% (${money(lineProfitCents)})` : 'Por definir'}
+                              </strong>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </section>
 
