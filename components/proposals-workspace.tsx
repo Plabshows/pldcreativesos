@@ -175,7 +175,15 @@ export function ProposalsWorkspace({ query = '' }: { query?: string }) {
             ...e,
             fields: {
               ...e.fields,
-              options: e.fields.options.map(o => (o.id === optionId ? { ...o, lines: o.lines.map(l => (l.id === lineId ? { ...l, ...patch } : l)) } : o)),
+              options: e.fields.options.map(o =>
+                o.id === optionId
+                  ? {
+                      ...o,
+                      recommended_price_cents: 'unit_price_cents' in patch ? null : o.recommended_price_cents,
+                      lines: o.lines.map(l => (l.id === lineId ? { ...l, ...patch } : l)),
+                    }
+                  : o
+              ),
             },
           }
         : null
@@ -313,22 +321,34 @@ export function ProposalsWorkspace({ query = '' }: { query?: string }) {
       const linesCount = o.lines.length;
       let updatedLines = o.lines;
 
-      if (linesCount === 1) {
+      if (linesCount === 0) {
+        return {
+          ...o,
+          recommended_price_cents: targetPrice,
+        };
+      } else if (linesCount === 1) {
         const line = o.lines[0];
         const qty = Math.max(1, (line.quantity || 1) * (line.units || 1));
         const unitPrice = Math.round(targetPrice / qty);
         updatedLines = [{ ...line, unit_price_cents: unitPrice, reference: false }];
-      } else if (linesCount > 1) {
+      } else {
         const lineRealCosts = o.lines.map(l => {
           const bd = calculateLineCost(l, settings);
           return Math.max(1, bd.totalRealCostCents);
         });
         const totalRealCost = lineRealCosts.reduce((a, b) => a + b, 0);
 
+        let allocatedTotal = 0;
         updatedLines = o.lines.map((l, idx) => {
           const qty = Math.max(1, (l.quantity || 1) * (l.units || 1));
-          const lineCostShare = lineRealCosts[idx] / totalRealCost;
-          const lineTargetSaleCents = Math.round(targetPrice * lineCostShare);
+          let lineTargetSaleCents: number;
+          if (idx === linesCount - 1) {
+            lineTargetSaleCents = Math.max(0, targetPrice - allocatedTotal);
+          } else {
+            const lineCostShare = lineRealCosts[idx] / totalRealCost;
+            lineTargetSaleCents = Math.round(targetPrice * lineCostShare);
+            allocatedTotal += lineTargetSaleCents;
+          }
           const unitPrice = Math.round(lineTargetSaleCents / qty);
           return { ...l, unit_price_cents: unitPrice, reference: false };
         });
@@ -1157,8 +1177,17 @@ export function ProposalsWorkspace({ query = '' }: { query?: string }) {
                           min={1}
                           max={99}
                           step="1"
+                          placeholder="%"
                           value={customMarginInput}
                           onChange={e => setCustomMarginInput(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              if (customMarginInput.trim() !== '') {
+                                const val = Number(customMarginInput);
+                                if (!isNaN(val) && val > 0 && val < 100) applyMarginPercentage(val);
+                              }
+                            }
+                          }}
                           style={{ width: '60px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #94a3b8', fontWeight: 700, textAlign: 'center', fontSize: '13px' }}
                         />
                         <span style={{ fontSize: '13px', fontWeight: 700, color: '#475569' }}>%</span>
@@ -1167,8 +1196,10 @@ export function ProposalsWorkspace({ query = '' }: { query?: string }) {
                         type="button"
                         className="secondary-button"
                         onClick={() => {
-                          const val = Number(customMarginInput);
-                          if (val > 0 && val < 100) applyMarginPercentage(val);
+                          if (customMarginInput.trim() !== '') {
+                            const val = Number(customMarginInput);
+                            if (!isNaN(val) && val > 0 && val < 100) applyMarginPercentage(val);
+                          }
                         }}
                         style={{ padding: '6px 12px', fontSize: '12px' }}
                       >
@@ -1187,8 +1218,13 @@ export function ProposalsWorkspace({ query = '' }: { query?: string }) {
                         onChange={e => setCustomPriceInput(e.target.value)}
                         onKeyDown={e => {
                           if (e.key === 'Enter') {
-                            const val = Number(customPriceInput);
-                            if (!isNaN(val) && val >= 0) applyTargetSalePrice(Math.round(val * 100));
+                            if (customPriceInput.trim() !== '') {
+                              const val = Number(customPriceInput);
+                              if (!isNaN(val) && val >= 0) {
+                                applyTargetSalePrice(Math.round(val * 100));
+                                setCustomPriceInput('');
+                              }
+                            }
                           }
                         }}
                         style={{ width: '100px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #94a3b8', fontWeight: 700, textAlign: 'right', fontSize: '13px' }}
@@ -1197,8 +1233,13 @@ export function ProposalsWorkspace({ query = '' }: { query?: string }) {
                         type="button"
                         className="primary-button"
                         onClick={() => {
-                          const val = Number(customPriceInput);
-                          if (!isNaN(val) && val >= 0) applyTargetSalePrice(Math.round(val * 100));
+                          if (customPriceInput.trim() !== '') {
+                            const val = Number(customPriceInput);
+                            if (!isNaN(val) && val >= 0) {
+                              applyTargetSalePrice(Math.round(val * 100));
+                              setCustomPriceInput('');
+                            }
+                          }
                         }}
                         style={{ padding: '6px 12px', fontSize: '12px' }}
                       >
