@@ -274,8 +274,13 @@ export function proposalText(q: ProposalFields, code = '') {
     parts.push('', `${q.options.length > 1 ? (en ? 'Alternative' : 'Alternativa') + ': ' : ''}${o.title}${q.status === 'accepted' && q.selected_option_id === o.id ? (en ? ' · Selected option' : ' · Opción elegida') : ''}`);
     for (const l of o.lines) {
       const unit = en ? { performer_event: 'performer / event', performer_day: 'performer / day', package: 'team / package', item: 'unit' }[l.unit] : quoteUnits.find(u => u[0] === l.unit)![1];
+      const qtyStr = l.quantity > 1 ? `${l.quantity} × ` : '';
+      const lineTotalCents = (l.unit_price_cents ?? 0) * Math.max(1, l.quantity || 1) * Math.max(1, l.units || 1);
+      const pricePrefix = lineTotalCents > 0 ? `${f(lineTotalCents)} ` : '';
+      const paxSuffix = (l.unit_price_cents !== null && (l.quantity > 1 || l.units > 1)) ? ` (${f(l.unit_price_cents)} pax)` : '';
+
       parts.push(
-        `${l.label} — ${l.quantity} ${unit}${l.units > 1 ? ' × ' + l.units + (en ? ' days / units' : ' días / unidades') : ''}`,
+        `• ${pricePrefix}${qtyStr}${l.label}${l.units > 1 ? ' × ' + l.units + (en ? ' days / units' : ' días / unidades') : ''}${paxSuffix}`,
         l.description,
         [l.format, l.sets ? `${en ? 'Sets' : 'Pases'}: ${l.sets}` : '', l.duration ? `${en ? 'Duration' : 'Duración'}: ${l.duration}` : '', l.wardrobe ? `${en ? 'Costumes' : 'Vestuario'}: ${l.wardrobe}` : ''].filter(Boolean).join(' · '),
         l.unit_price_cents === null

@@ -35,7 +35,21 @@ export function generateWhatsAppMessage(
       const qtyStr = l.quantity > 1 ? `${l.quantity} × ` : '';
       const unitStr = l.units > 1 ? ` (${l.units} ${isEn ? 'days/units' : 'días/pases'})` : '';
       const setStr = l.sets ? ` • ${l.sets}` : '';
-      return `• ${qtyStr}${l.label}${unitStr}${setStr}`;
+
+      const lineTotalCents = (l.unit_price_cents ?? 0) * Math.max(1, l.quantity || 1) * Math.max(1, l.units || 1);
+      let pricePrefix = '';
+      let paxSuffix = '';
+
+      if (lineTotalCents > 0) {
+        const lineTotalEur = lineTotalCents / 100;
+        pricePrefix = `${lineTotalEur}€ `;
+        if (l.quantity > 1 || l.units > 1) {
+          const unitPriceEur = (l.unit_price_cents ?? 0) / 100;
+          paxSuffix = ` (${unitPriceEur}€ pax)`;
+        }
+      }
+
+      return `• ${pricePrefix}${qtyStr}${l.label}${unitStr}${setStr}${paxSuffix}`;
     })
     .join('\n');
 
@@ -97,10 +111,24 @@ export function generateEmailMessage(
 
   const linesSummary = selectedOption.lines
     .map(l => {
-      const qtyStr = `${l.quantity} × `;
+      const qtyStr = l.quantity > 1 ? `${l.quantity} × ` : '';
       const setStr = l.sets ? ` (${l.sets})` : '';
       const desc = l.description ? `\n   ${l.description}` : '';
-      return `• ${qtyStr}${l.label}${setStr}${desc}`;
+
+      const lineTotalCents = (l.unit_price_cents ?? 0) * Math.max(1, l.quantity || 1) * Math.max(1, l.units || 1);
+      let pricePrefix = '';
+      let paxSuffix = '';
+
+      if (lineTotalCents > 0) {
+        const lineTotalEur = lineTotalCents / 100;
+        pricePrefix = `${lineTotalEur}€ `;
+        if (l.quantity > 1 || l.units > 1) {
+          const unitPriceEur = (l.unit_price_cents ?? 0) / 100;
+          paxSuffix = ` (${unitPriceEur}€ pax)`;
+        }
+      }
+
+      return `• ${pricePrefix}${qtyStr}${l.label}${setStr}${paxSuffix}${desc}`;
     })
     .join('\n\n');
 
