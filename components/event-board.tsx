@@ -178,6 +178,7 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
            </td>
           <td style={{padding:'8px 10px'}}>
            <select
+            key={`${a.talent_id}-${st}`}
             value={st} disabled={disabled}
             style={{padding:'6px 8px',border:'1px solid #cbd5e1',borderRadius:'6px',fontSize:'12px',fontWeight:500,color:st==='paid'?'#15803d':'#b45309',background:st==='paid'?'#f0fdf4':'#fffbeb'}}
             onChange={evt=>{

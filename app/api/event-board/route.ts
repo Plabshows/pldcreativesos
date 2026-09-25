@@ -56,10 +56,35 @@ export async function POST(req:Request){
  }
  const b=p.data,org=a.membership.organization_id;let r;
  if(b.action==='artistFee'){
-  const result=await a.supabase.rpc('set_artist_budget',{target_org:org,target_event:b.event_id,target_talent:b.talent_id,fee:b.fee_cents});
-  if(result.error)return NextResponse.json({error:result.error.code==='P0001'?result.error.message:'No se pudo guardar el sueldo completo. Comprueba que la actualización de Supabase esté aplicada.'},{status:409});
-  if(b.status){
-   await a.supabase.from('payments').update({status:b.status}).eq('organization_id',org).eq('event_id',b.event_id).eq('talent_id',b.talent_id).eq('kind','artist');
+  if (b.status) {
+   const existing = await a.supabase.from('payments').select('id').eq('organization_id',org).eq('event_id',b.event_id).eq('talent_id',b.talent_id).eq('kind','artist');
+   if (existing.data && existing.data.length > 0) {
+    const up = await a.supabase.from('payments').update({
+     status: b.status,
+     paid_on: b.status === 'paid' ? new Date().toISOString().slice(0, 10) : null,
+     updated_at: new Date().toISOString()
+    }).eq('organization_id',org).eq('event_id',b.event_id).eq('talent_id',b.talent_id).eq('kind','artist');
+    if (up.error) return NextResponse.json({error: 'No se pudo cambiar el estado de pago: ' + up.error.message},{status: 400});
+   } else {
+    const ins = await a.supabase.from('payments').insert({
+     organization_id: org,
+     event_id: b.event_id,
+     talent_id: b.talent_id,
+     kind: 'artist',
+     direction: 'outbound',
+     amount_cents: b.fee_cents || 0,
+     status: b.status,
+     paid_on: b.status === 'paid' ? new Date().toISOString().slice(0, 10) : null
+    });
+    if (ins.error) return NextResponse.json({error: 'No se pudo registrar el pago: ' + ins.error.message},{status: 400});
+   }
+  }
+
+  if (b.fee_cents !== null && b.fee_cents !== undefined) {
+   const result=await a.supabase.rpc('set_artist_budget',{target_org:org,target_event:b.event_id,target_talent:b.talent_id,fee:b.fee_cents});
+   if(result.error && !b.status) {
+    return NextResponse.json({error:result.error.code==='P0001'?result.error.message:'No se pudo guardar el sueldo completo. Comprueba que la actualización de Supabase esté aplicada.'},{status:409});
+   }
   }
   return NextResponse.json({ok:true});
  } else if (b.action === 'providerExpense') {
