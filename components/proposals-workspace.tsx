@@ -1072,181 +1072,198 @@ export function ProposalsWorkspace({ query = '' }: { query?: string }) {
                   </section>
 
                   {/* Pricing Cards */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
-                    <h3 style={{ fontSize: '15px', margin: 0, color: '#0f172a' }}>💳 SELECCIONAR MARGEN / TARJETA DE PRECIO</h3>
-                    <span style={{ fontSize: '12px', color: '#64748b' }}>Haz clic en cualquier tarjeta para fijar ese precio automáticamente</span>
-                  </div>
+                  {(() => {
+                    const is30 = Math.abs(activePricing.finalSalePriceCents - activePricing.priceMargin30Cents) <= 100;
+                    const is35 = Math.abs(activePricing.finalSalePriceCents - activePricing.priceMargin35Cents) <= 100;
+                    const is40 = Math.abs(activePricing.finalSalePriceCents - activePricing.priceMargin40Cents) <= 100;
+                    const is45 = Math.abs(activePricing.finalSalePriceCents - activePricing.priceMargin45Cents) <= 100;
+                    const isManual = !is30 && !is35 && !is40 && !is45 && activePricing.finalSalePriceCents > 0;
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))', gap: '12px', marginBottom: '16px' }}>
-                    {/* CARD 30% */}
-                    <button
-                      type="button"
-                      onClick={() => applyMarginPercentage(30)}
-                      style={{
-                        background: Math.abs(activePricing.grossMarginPercent - 30) < 0.8 ? '#fef3c7' : '#ffffff',
-                        border: Math.abs(activePricing.grossMarginPercent - 30) < 0.8 ? '2px solid #d97706' : '1px solid #cbd5e1',
-                        padding: '14px',
-                        borderRadius: '10px',
-                        textAlign: 'center',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease',
-                        boxShadow: Math.abs(activePricing.grossMarginPercent - 30) < 0.8 ? '0 0 0 3px rgba(217, 119, 6, 0.2)' : '0 1px 3px rgba(0,0,0,0.05)',
-                      }}
-                    >
-                      <span style={{ fontSize: '11px', color: '#b45309', fontWeight: 700, display: 'block' }}>MÍNIMO (30%)</span>
-                      <strong style={{ fontSize: '18px', color: '#92400e', display: 'block', margin: '4px 0' }}>{money(activePricing.priceMargin30Cents)}</strong>
-                      <span style={{ fontSize: '10px', background: Math.abs(activePricing.grossMarginPercent - 30) < 0.8 ? '#d97706' : '#f1f5f9', color: Math.abs(activePricing.grossMarginPercent - 30) < 0.8 ? '#ffffff' : '#475569', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
-                        {Math.abs(activePricing.grossMarginPercent - 30) < 0.8 ? '✓ SELECCIONADO' : 'APLICAR 30%'}
-                      </span>
-                    </button>
+                    return (
+                      <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                          <h3 style={{ fontSize: '15px', margin: 0, color: '#0f172a' }}>💳 SELECCIONAR MARGEN / TARJETA DE PRECIO</h3>
+                          <span style={{ fontSize: '12px', color: '#64748b' }}>Haz clic en cualquier tarjeta para fijar ese precio automáticamente</span>
+                        </div>
 
-                    {/* CARD 35% */}
-                    <button
-                      type="button"
-                      onClick={() => applyMarginPercentage(35)}
-                      style={{
-                        background: Math.abs(activePricing.grossMarginPercent - 35) < 0.8 ? '#eff6ff' : '#ffffff',
-                        border: Math.abs(activePricing.grossMarginPercent - 35) < 0.8 ? '2px solid #2563eb' : '1px solid #93c5fd',
-                        padding: '14px',
-                        borderRadius: '10px',
-                        textAlign: 'center',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease',
-                        boxShadow: Math.abs(activePricing.grossMarginPercent - 35) < 0.8 ? '0 0 0 3px rgba(37, 99, 235, 0.2)' : '0 1px 3px rgba(0,0,0,0.05)',
-                      }}
-                    >
-                      <span style={{ fontSize: '11px', color: '#1d4ed8', fontWeight: 700, display: 'block' }}>BUENO (35%)</span>
-                      <strong style={{ fontSize: '18px', color: '#1e40af', display: 'block', margin: '4px 0' }}>{money(activePricing.priceMargin35Cents)}</strong>
-                      <span style={{ fontSize: '10px', background: Math.abs(activePricing.grossMarginPercent - 35) < 0.8 ? '#2563eb' : '#dbeafe', color: Math.abs(activePricing.grossMarginPercent - 35) < 0.8 ? '#ffffff' : '#1e40af', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
-                        {Math.abs(activePricing.grossMarginPercent - 35) < 0.8 ? '✓ SELECCIONADO' : 'APLICAR 35%'}
-                      </span>
-                    </button>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+                          {/* CARD 30% */}
+                          <button
+                            type="button"
+                            onClick={() => applyMarginPercentage(30)}
+                            style={{
+                              background: is30 ? '#fef3c7' : '#ffffff',
+                              border: is30 ? '2px solid #d97706' : '1px solid #cbd5e1',
+                              padding: '14px',
+                              borderRadius: '10px',
+                              textAlign: 'center',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                              boxShadow: is30 ? '0 0 0 3px rgba(217, 119, 6, 0.2)' : '0 1px 3px rgba(0,0,0,0.05)',
+                            }}
+                          >
+                            <span style={{ fontSize: '11px', color: '#b45309', fontWeight: 700, display: 'block' }}>MÍNIMO (30%)</span>
+                            <strong style={{ fontSize: '18px', color: '#92400e', display: 'block', margin: '4px 0' }}>{money(activePricing.priceMargin30Cents)}</strong>
+                            <span style={{ fontSize: '10px', background: is30 ? '#d97706' : '#f1f5f9', color: is30 ? '#ffffff' : '#475569', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
+                              {is30 ? '✓ SELECCIONADO' : 'APLICAR 30%'}
+                            </span>
+                          </button>
 
-                    {/* CARD 40% */}
-                    <button
-                      type="button"
-                      onClick={() => applyMarginPercentage(40)}
-                      style={{
-                        background: Math.abs(activePricing.grossMarginPercent - 40) < 0.8 ? '#dcfce7' : '#f0fdf4',
-                        border: Math.abs(activePricing.grossMarginPercent - 40) < 0.8 ? '2px solid #16a34a' : '2px solid #22c55e',
-                        padding: '14px',
-                        borderRadius: '10px',
-                        textAlign: 'center',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease',
-                        boxShadow: Math.abs(activePricing.grossMarginPercent - 40) < 0.8 ? '0 0 0 3px rgba(22, 163, 74, 0.25)' : '0 1px 3px rgba(0,0,0,0.05)',
-                      }}
-                    >
-                      <span style={{ fontSize: '11px', color: '#15803d', fontWeight: 800, display: 'block' }}>🎯 OBJETIVO (40%)</span>
-                      <strong style={{ fontSize: '20px', color: '#166534', display: 'block', margin: '4px 0' }}>{money(activePricing.priceMargin40Cents)}</strong>
-                      <span style={{ fontSize: '10px', background: '#16a34a', color: '#ffffff', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
-                        {Math.abs(activePricing.grossMarginPercent - 40) < 0.8 ? '✓ SELECCIONADO' : 'APLICAR 40%'}
-                      </span>
-                    </button>
+                          {/* CARD 35% */}
+                          <button
+                            type="button"
+                            onClick={() => applyMarginPercentage(35)}
+                            style={{
+                              background: is35 ? '#eff6ff' : '#ffffff',
+                              border: is35 ? '2px solid #2563eb' : '1px solid #93c5fd',
+                              padding: '14px',
+                              borderRadius: '10px',
+                              textAlign: 'center',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                              boxShadow: is35 ? '0 0 0 3px rgba(37, 99, 235, 0.2)' : '0 1px 3px rgba(0,0,0,0.05)',
+                            }}
+                          >
+                            <span style={{ fontSize: '11px', color: '#1d4ed8', fontWeight: 700, display: 'block' }}>BUENO (35%)</span>
+                            <strong style={{ fontSize: '18px', color: '#1e40af', display: 'block', margin: '4px 0' }}>{money(activePricing.priceMargin35Cents)}</strong>
+                            <span style={{ fontSize: '10px', background: is35 ? '#2563eb' : '#dbeafe', color: is35 ? '#ffffff' : '#1e40af', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
+                              {is35 ? '✓ SELECCIONADO' : 'APLICAR 35%'}
+                            </span>
+                          </button>
 
-                    {/* CARD 45% */}
-                    <button
-                      type="button"
-                      onClick={() => applyMarginPercentage(45)}
-                      style={{
-                        background: Math.abs(activePricing.grossMarginPercent - 45) < 0.8 ? '#faf5ff' : '#ffffff',
-                        border: Math.abs(activePricing.grossMarginPercent - 45) < 0.8 ? '2px solid #9333ea' : '1px solid #cbd5e1',
-                        padding: '14px',
-                        borderRadius: '10px',
-                        textAlign: 'center',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease',
-                        boxShadow: Math.abs(activePricing.grossMarginPercent - 45) < 0.8 ? '0 0 0 3px rgba(147, 51, 234, 0.2)' : '0 1px 3px rgba(0,0,0,0.05)',
-                      }}
-                    >
-                      <span style={{ fontSize: '11px', color: '#7e22ce', fontWeight: 700, display: 'block' }}>PREMIUM (45%)</span>
-                      <strong style={{ fontSize: '18px', color: '#6b21a8', display: 'block', margin: '4px 0' }}>{money(activePricing.priceMargin45Cents)}</strong>
-                      <span style={{ fontSize: '10px', background: Math.abs(activePricing.grossMarginPercent - 45) < 0.8 ? '#9333ea' : '#f1f5f9', color: Math.abs(activePricing.grossMarginPercent - 45) < 0.8 ? '#ffffff' : '#475569', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
-                        {Math.abs(activePricing.grossMarginPercent - 45) < 0.8 ? '✓ SELECCIONADO' : 'APLICAR 45%'}
-                      </span>
-                    </button>
-                  </div>
+                          {/* CARD 40% */}
+                          <button
+                            type="button"
+                            onClick={() => applyMarginPercentage(40)}
+                            style={{
+                              background: is40 ? '#dcfce7' : '#f0fdf4',
+                              border: is40 ? '2px solid #16a34a' : '2px solid #22c55e',
+                              padding: '14px',
+                              borderRadius: '10px',
+                              textAlign: 'center',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                              boxShadow: is40 ? '0 0 0 3px rgba(22, 163, 74, 0.25)' : '0 1px 3px rgba(0,0,0,0.05)',
+                            }}
+                          >
+                            <span style={{ fontSize: '11px', color: '#15803d', fontWeight: 800, display: 'block' }}>🎯 OBJETIVO (40%)</span>
+                            <strong style={{ fontSize: '20px', color: '#166534', display: 'block', margin: '4px 0' }}>{money(activePricing.priceMargin40Cents)}</strong>
+                            <span style={{ fontSize: '10px', background: is40 ? '#16a34a' : '#22c55e', color: '#ffffff', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
+                              {is40 ? '✓ SELECCIONADO' : 'APLICAR 40%'}
+                            </span>
+                          </button>
 
-                  {/* Custom Margin & Direct Price Override Control Bar */}
-                  <div style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', padding: '14px', marginBottom: '20px', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>Elegir otro % de Margen:</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <input
-                          type="number"
-                          min={1}
-                          max={99}
-                          step="1"
-                          placeholder="%"
-                          value={customMarginInput}
-                          onChange={e => setCustomMarginInput(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') {
-                              if (customMarginInput.trim() !== '') {
-                                const val = Number(customMarginInput);
-                                if (!isNaN(val) && val > 0 && val < 100) applyMarginPercentage(val);
-                              }
-                            }
-                          }}
-                          style={{ width: '60px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #94a3b8', fontWeight: 700, textAlign: 'center', fontSize: '13px' }}
-                        />
-                        <span style={{ fontSize: '13px', fontWeight: 700, color: '#475569' }}>%</span>
-                      </div>
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        onClick={() => {
-                          if (customMarginInput.trim() !== '') {
-                            const val = Number(customMarginInput);
-                            if (!isNaN(val) && val > 0 && val < 100) applyMarginPercentage(val);
-                          }
-                        }}
-                        style={{ padding: '6px 12px', fontSize: '12px' }}
-                      >
-                        Aplicar %
-                      </button>
-                    </div>
+                          {/* CARD 45% */}
+                          <button
+                            type="button"
+                            onClick={() => applyMarginPercentage(45)}
+                            style={{
+                              background: is45 ? '#faf5ff' : '#ffffff',
+                              border: is45 ? '2px solid #9333ea' : '1px solid #cbd5e1',
+                              padding: '14px',
+                              borderRadius: '10px',
+                              textAlign: 'center',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                              boxShadow: is45 ? '0 0 0 3px rgba(147, 51, 234, 0.2)' : '0 1px 3px rgba(0,0,0,0.05)',
+                            }}
+                          >
+                            <span style={{ fontSize: '11px', color: '#7e22ce', fontWeight: 700, display: 'block' }}>PREMIUM (45%)</span>
+                            <strong style={{ fontSize: '18px', color: '#6b21a8', display: 'block', margin: '4px 0' }}>{money(activePricing.priceMargin45Cents)}</strong>
+                            <span style={{ fontSize: '10px', background: is45 ? '#9333ea' : '#f1f5f9', color: is45 ? '#ffffff' : '#475569', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
+                              {is45 ? '✓ SELECCIONADO' : 'APLICAR 45%'}
+                            </span>
+                          </button>
+                        </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>Escribir Precio Manual (€):</span>
-                      <input
-                        type="number"
-                        min={0}
-                        step="1"
-                        placeholder={(activePricing.finalSalePriceCents / 100).toFixed(2)}
-                        value={customPriceInput}
-                        onChange={e => setCustomPriceInput(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') {
-                            if (customPriceInput.trim() !== '') {
-                              const val = Number(customPriceInput);
-                              if (!isNaN(val) && val >= 0) {
-                                applyTargetSalePrice(Math.round(val * 100));
-                                setCustomPriceInput('');
-                              }
-                            }
-                          }
-                        }}
-                        style={{ width: '100px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #94a3b8', fontWeight: 700, textAlign: 'right', fontSize: '13px' }}
-                      />
-                      <button
-                        type="button"
-                        className="primary-button"
-                        onClick={() => {
-                          if (customPriceInput.trim() !== '') {
-                            const val = Number(customPriceInput);
-                            if (!isNaN(val) && val >= 0) {
-                              applyTargetSalePrice(Math.round(val * 100));
-                              setCustomPriceInput('');
-                            }
-                          }
-                        }}
-                        style={{ padding: '6px 12px', fontSize: '12px' }}
-                      >
-                        Fijar Precio
-                      </button>
-                    </div>
-                  </div>
+                        {/* Custom Margin & Direct Price Override Control Bar */}
+                        <div style={{ background: isManual ? '#f0f9ff' : '#ffffff', border: isManual ? '2px solid #0284c7' : '1px solid #cbd5e1', borderRadius: '10px', padding: '14px', marginBottom: '20px', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center', justifyContent: 'space-between', boxShadow: isManual ? '0 0 0 3px rgba(2, 132, 199, 0.15)' : '0 1px 3px rgba(0,0,0,0.03)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>Elegir otro % de Margen:</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <input
+                                type="number"
+                                min={1}
+                                max={99}
+                                step="1"
+                                placeholder="%"
+                                value={customMarginInput}
+                                onChange={e => setCustomMarginInput(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') {
+                                    if (customMarginInput.trim() !== '') {
+                                      const val = Number(customMarginInput);
+                                      if (!isNaN(val) && val > 0 && val < 100) applyMarginPercentage(val);
+                                    }
+                                  }
+                                }}
+                                style={{ width: '60px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #94a3b8', fontWeight: 700, textAlign: 'center', fontSize: '13px' }}
+                              />
+                              <span style={{ fontSize: '13px', fontWeight: 700, color: '#475569' }}>%</span>
+                            </div>
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              onClick={() => {
+                                if (customMarginInput.trim() !== '') {
+                                  const val = Number(customMarginInput);
+                                  if (!isNaN(val) && val > 0 && val < 100) applyMarginPercentage(val);
+                                }
+                              }}
+                              style={{ padding: '6px 12px', fontSize: '12px' }}
+                            >
+                              Aplicar %
+                            </button>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                            {isManual && (
+                              <span style={{ fontSize: '11px', background: '#e0f2fe', color: '#0369a1', padding: '3px 8px', borderRadius: '12px', fontWeight: 700 }}>
+                                ✓ PRECIO MANUAL EN USO ({money(activePricing.finalSalePriceCents)})
+                              </span>
+                            )}
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>Escribir Precio Manual (€):</span>
+                            <input
+                              type="number"
+                              min={0}
+                              step="1"
+                              placeholder={(activePricing.finalSalePriceCents / 100).toFixed(2)}
+                              value={customPriceInput}
+                              onChange={e => setCustomPriceInput(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  if (customPriceInput.trim() !== '') {
+                                    const val = Number(customPriceInput);
+                                    if (!isNaN(val) && val >= 0) {
+                                      applyTargetSalePrice(Math.round(val * 100));
+                                      setCustomPriceInput('');
+                                    }
+                                  }
+                                }
+                              }}
+                              style={{ width: '100px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #94a3b8', fontWeight: 700, textAlign: 'right', fontSize: '13px' }}
+                            />
+                            <button
+                              type="button"
+                              className="primary-button"
+                              onClick={() => {
+                                if (customPriceInput.trim() !== '') {
+                                  const val = Number(customPriceInput);
+                                  if (!isNaN(val) && val >= 0) {
+                                    applyTargetSalePrice(Math.round(val * 100));
+                                    setCustomPriceInput('');
+                                  }
+                                }
+                              }}
+                              style={{ padding: '6px 12px', fontSize: '12px' }}
+                            >
+                              Fijar Precio
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
 
                   {/* Profitability Result & Manual Price Override */}
                   <section

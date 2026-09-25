@@ -314,11 +314,8 @@ export function calculateOptionPricing(
     rawSaleCents = Math.max(0, rawSaleCents - option.discount_cents);
   }
 
-  // Agency Commission added on top
-  let finalSalePriceCents = rawSaleCents;
-  if (agencyCommissionPercent > 0 && agencyCommissionPercent < 100) {
-    finalSalePriceCents = Math.round(rawSaleCents / (1 - agencyCommissionPercent / 100));
-  }
+  // Final Sale Price (matches exact sum of lines or target price override)
+  const finalSalePriceCents = rawSaleCents;
 
   // 9. Profit & Margin Calculations
   const grossProfitCents = finalSalePriceCents - totalRealCostCents;
