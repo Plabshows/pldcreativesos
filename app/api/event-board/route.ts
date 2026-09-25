@@ -56,9 +56,11 @@ export async function POST(req:Request){
  }
  const b=p.data,org=a.membership.organization_id;let r;
  if(b.action==='artistFee'){
-  if(b.status==='paid')return NextResponse.json({error:'Registra el pago en Facturación & Gastos con fecha e importe.'},{status:409});
   const result=await a.supabase.rpc('set_artist_budget',{target_org:org,target_event:b.event_id,target_talent:b.talent_id,fee:b.fee_cents});
   if(result.error)return NextResponse.json({error:result.error.code==='P0001'?result.error.message:'No se pudo guardar el sueldo completo. Comprueba que la actualización de Supabase esté aplicada.'},{status:409});
+  if(b.status){
+   await a.supabase.from('payments').update({status:b.status}).eq('organization_id',org).eq('event_id',b.event_id).eq('talent_id',b.talent_id).eq('kind','artist');
+  }
   return NextResponse.json({ok:true});
  } else if (b.action === 'providerExpense') {
   const result=await a.supabase.rpc('set_event_provider_expense',{

@@ -400,21 +400,39 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
   <p>Cargando tus eventos…</p>
  ) : view === 'calendar' ? (
   <>
-   <label className="eb-month">
-    Mes <input aria-label="Mes del calendario" type="month" value={month} onChange={e => setMonth(e.target.value)} />
-   </label>
+   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+    <label className="eb-month" style={{ margin: 0 }}>
+     Mes <input aria-label="Mes del calendario" type="month" value={month} onChange={e => setMonth(e.target.value)} />
+    </label>
+    <div className="eb-calendar-legend">
+     <div className="eb-calendar-legend-item" style={{ background: '#f0fdf4', borderColor: '#bbf7d0', color: '#15803d' }}>
+      🟢 Cobrado / Pagado
+     </div>
+     <div className="eb-calendar-legend-item" style={{ background: '#fef2f2', borderColor: '#fecaca', color: '#b91c1c' }}>
+      🔴 Pendiente de cobro
+     </div>
+     <div className="eb-calendar-legend-item" style={{ background: '#eff6ff', borderColor: '#bfdbfe', color: '#1d4ed8' }}>
+      🔵 Sin confirmar
+     </div>
+    </div>
+   </div>
    <div className="eb-calendar">
     {Array.from({ length: new Date(Number(month.slice(0, 4)), Number(month.slice(5)), 0).getDate() }, (_, i) => {
      const day = month + '-' + String(i + 1).padStart(2, '0');
      return (
       <section key={day}>
        <b>{new Date(day + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' })}</b>
-       {rows.filter(e => e.event_date === day).map(e => (
-        <button key={e.id} onClick={() => setDrawer(e.id)}>
-         <strong>{e.event_name}</strong>
-         <small>{clientName(e.client_id)} · {labels[e.status]}</small>
-        </button>
-       ))}
+       {rows.filter(e => e.event_date === day).map(e => {
+        const paidClass = e.client_paid === true ? 'eb-paid-yes' : e.client_paid === false ? 'eb-paid-no' : 'eb-paid-unknown';
+        const paidLabel = e.client_paid === true ? '🟢 Pagado' : e.client_paid === false ? '🔴 Pendiente' : '🔵 Sin confirmar';
+        return (
+         <button key={e.id} className={paidClass} onClick={() => setDrawer(e.id)}>
+          <strong>{e.event_name}</strong>
+          <small>{clientName(e.client_id)} · {labels[e.status]}</small>
+          <span className="eb-paid-badge">{paidLabel}</span>
+         </button>
+        );
+       })}
       </section>
      );
     })}

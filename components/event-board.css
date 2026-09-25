@@ -7,3 +7,61 @@
 .eb-billing-type{width:auto!important;min-width:80px;padding:5px 6px!important;font-size:12px!important;font-weight:600;border-radius:5px!important;border:1px solid #d1d5db!important;background:#fff!important;color:#374151!important}
 .eb-billing-type.cash{background:#ecfdf5!important;color:#065f46!important;border-color:#a7f3d0!important}
 .eb-cash-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:700;background:linear-gradient(135deg,#ecfdf5,#d1fae5);color:#065f46;border:1px solid #6ee7b7;white-space:nowrap;letter-spacing:0.02em}
+
+.eb-calendar button.eb-paid-yes {
+  background: #f0fdf4;
+  border-left: 4px solid #16a34a;
+  color: #14532d;
+}
+.eb-calendar button.eb-paid-no {
+  background: #fef2f2;
+  border-left: 4px solid #dc2626;
+  color: #7f1d1d;
+}
+.eb-calendar button.eb-paid-unknown {
+  background: #eff6ff;
+  border-left: 4px solid #2563eb;
+  color: #1e3a8a;
+}
+
+.eb-paid-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.eb-paid-yes .eb-paid-badge {
+  background: #dcfce7;
+  color: #15803d;
+}
+.eb-paid-no .eb-paid-badge {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.eb-paid-unknown .eb-paid-badge {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.eb-calendar-legend {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  flex-wrap: wrap;
+}
+.eb-calendar-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
