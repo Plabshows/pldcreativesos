@@ -55,46 +55,67 @@ export async function POST(req:Request){
   return NextResponse.json({error:'Revisa los campos y la fecha: ' + p.error.message},{status:400});
  }
  const b=p.data,org=a.membership.organization_id;let r;
- if(b.action==='artistFee'){
-  const rpcRes = await a.supabase.rpc('upsert_artist_payment', {
-   target_org: org,
-   target_event: b.event_id,
-   target_talent: b.talent_id,
-   fee: b.fee_cents ?? null,
-   new_status: b.status || null,
-   new_paid_on: b.status === 'paid' ? new Date().toISOString() : null
-  });
+ if (b.action === 'artistFee') {
+  const { event_id, talent_id, fee_cents, status } = b;
 
-  if (rpcRes.error) {
-   if (b.status) {
-    const existing = await a.supabase.from('payments').select('id').eq('organization_id', org).eq('event_id', b.event_id).eq('talent_id', b.talent_id).eq('kind', 'artist').maybeSingle();
-    if (existing.data) {
-     await a.supabase.from('payments').update({
-      status: b.status,
-      paid_on: b.status === 'paid' ? new Date().toISOString() : null,
-      updated_at: new Date().toISOString()
-     }).eq('id', existing.data.id);
-    } else {
-     await a.supabase.from('payments').insert({
-      organization_id: org,
-      event_id: b.event_id,
-      talent_id: b.talent_id,
-      kind: 'artist',
-      direction: 'outbound',
-      amount_cents: b.fee_cents || 0,
-      status: b.status,
-      paid_on: b.status === 'paid' ? new Date().toISOString() : null
-     });
-    }
+  if (fee_cents !== null && fee_cents !== undefined) {
+   await a.supabase.from('event_talent')
+    .update({ agreed_cost_cents: fee_cents })
+    .eq('organization_id', org)
+    .eq('event_id', event_id)
+    .eq('talent_id', talent_id);
+  }
+
+  const existingPayments = await a.supabase.from('payments')
+   .select('id, status, amount_cents')
+   .eq('organization_id', org)
+   .eq('event_id', event_id)
+   .eq('talent_id', talent_id)
+   .eq('kind', 'artist');
+
+  const newStatus = status || 'pending';
+  const newAmount = fee_cents !== null && fee_cents !== undefined ? fee_cents : (existingPayments.data?.[0]?.amount_cents || 0);
+
+  if (existingPayments.data && existingPayments.data.length > 0) {
+   const updatePayload: Record<string, unknown> = {
+    amount_cents: newAmount,
+    updated_at: new Date().toISOString()
+   };
+   if (status) {
+    updatePayload.status = status;
+    updatePayload.paid_on = status === 'paid' ? new Date().toISOString() : null;
    }
 
-   if (b.fee_cents !== null && b.fee_cents !== undefined) {
-    await a.supabase.from('event_talent').update({ agreed_cost_cents: b.fee_cents }).eq('organization_id', org).eq('event_id', b.event_id).eq('talent_id', b.talent_id);
-    await a.supabase.from('payments').update({ amount_cents: b.fee_cents }).eq('organization_id', org).eq('event_id', b.event_id).eq('talent_id', b.talent_id).eq('kind', 'artist');
+   const upRes = await a.supabase.from('payments')
+    .update(updatePayload)
+    .eq('organization_id', org)
+    .eq('event_id', event_id)
+    .eq('talent_id', talent_id)
+    .eq('kind', 'artist');
+
+   if (upRes.error) {
+    console.error('[artistFee update error]', upRes.error);
+    return NextResponse.json({ error: 'No se pudo actualizar el pago: ' + upRes.error.message }, { status: 400 });
+   }
+  } else {
+   const insRes = await a.supabase.from('payments').insert({
+    organization_id: org,
+    event_id: event_id,
+    talent_id: talent_id,
+    kind: 'artist',
+    direction: 'outbound',
+    amount_cents: newAmount,
+    status: newStatus,
+    paid_on: newStatus === 'paid' ? new Date().toISOString() : null
+   });
+
+   if (insRes.error) {
+    console.error('[artistFee insert error]', insRes.error);
+    return NextResponse.json({ error: 'No se pudo registrar el pago: ' + insRes.error.message }, { status: 400 });
    }
   }
 
-  await syncEventExpensesTotal(a.supabase, org, b.event_id);
+  await syncEventExpensesTotal(a.supabase, org, event_id);
   return NextResponse.json({ ok: true });
  } else if (b.action === 'providerExpense') {
   const result=await a.supabase.rpc('set_event_provider_expense',{

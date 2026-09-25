@@ -49,47 +49,66 @@ export async function POST(req: Request) {
  }
 
  const b = parsed.data, org = a.membership.organization_id;
+ const { event_id, talent_id, amount, status, paid_on } = b;
 
- const rpcRes = await a.supabase.rpc('upsert_artist_payment', {
-  target_org: org,
-  target_event: b.event_id,
-  target_talent: b.talent_id,
-  fee: b.amount ?? null,
-  new_status: b.status || null,
-  new_paid_on: b.status === 'paid' ? (b.paid_on || new Date().toISOString()) : null
- });
+ if (amount !== null && amount !== undefined) {
+  await a.supabase.from('event_talent')
+   .update({ agreed_cost_cents: amount })
+   .eq('organization_id', org)
+   .eq('event_id', event_id)
+   .eq('talent_id', talent_id);
+ }
 
- if (rpcRes.error) {
-  // Fallback direct execution
-  if (b.status) {
-   const existing = await a.supabase.from('payments').select('id').eq('organization_id', org).eq('event_id', b.event_id).eq('talent_id', b.talent_id).eq('kind', 'artist').maybeSingle();
-   if (existing.data) {
-    await a.supabase.from('payments').update({
-     status: b.status,
-     paid_on: b.status === 'paid' ? (b.paid_on || new Date().toISOString()) : null,
-     updated_at: new Date().toISOString()
-    }).eq('id', existing.data.id);
-   } else {
-    await a.supabase.from('payments').insert({
-     organization_id: org,
-     event_id: b.event_id,
-     talent_id: b.talent_id,
-     kind: 'artist',
-     direction: 'outbound',
-     amount_cents: b.amount || 0,
-     status: b.status,
-     paid_on: b.status === 'paid' ? (b.paid_on || new Date().toISOString()) : null
-    });
-   }
+ const existingPayments = await a.supabase.from('payments')
+  .select('id, status, amount_cents')
+  .eq('organization_id', org)
+  .eq('event_id', event_id)
+  .eq('talent_id', talent_id)
+  .eq('kind', 'artist');
+
+ const newStatus = status || 'pending';
+ const newAmount = amount !== null && amount !== undefined ? amount : (existingPayments.data?.[0]?.amount_cents || 0);
+
+ if (existingPayments.data && existingPayments.data.length > 0) {
+  const updatePayload: Record<string, unknown> = {
+   amount_cents: newAmount,
+   updated_at: new Date().toISOString()
+  };
+  if (status) {
+   updatePayload.status = status;
+   updatePayload.paid_on = status === 'paid' ? (paid_on || new Date().toISOString()) : null;
   }
 
-  if (b.amount !== null && b.amount !== undefined) {
-   await a.supabase.from('event_talent').update({ agreed_cost_cents: b.amount }).eq('organization_id', org).eq('event_id', b.event_id).eq('talent_id', b.talent_id);
-   await a.supabase.from('payments').update({ amount_cents: b.amount }).eq('organization_id', org).eq('event_id', b.event_id).eq('talent_id', b.talent_id).eq('kind', 'artist');
+  const upRes = await a.supabase.from('payments')
+   .update(updatePayload)
+   .eq('organization_id', org)
+   .eq('event_id', event_id)
+   .eq('talent_id', talent_id)
+   .eq('kind', 'artist');
+
+  if (upRes.error) {
+   console.error('[artist-pay update error]', upRes.error);
+   return NextResponse.json({ error: 'No se pudo actualizar el pago: ' + upRes.error.message }, { status: 400 });
+  }
+ } else {
+  const insRes = await a.supabase.from('payments').insert({
+   organization_id: org,
+   event_id: event_id,
+   talent_id: talent_id,
+   kind: 'artist',
+   direction: 'outbound',
+   amount_cents: newAmount,
+   status: newStatus,
+   paid_on: newStatus === 'paid' ? (paid_on || new Date().toISOString()) : null
+  });
+
+  if (insRes.error) {
+   console.error('[artist-pay insert error]', insRes.error);
+   return NextResponse.json({ error: 'No se pudo registrar el pago: ' + insRes.error.message }, { status: 400 });
   }
  }
 
- await syncEventExpensesTotal(a.supabase, org, b.event_id);
+ await syncEventExpensesTotal(a.supabase, org, event_id);
  return NextResponse.json({ ok: true });
 }
 
