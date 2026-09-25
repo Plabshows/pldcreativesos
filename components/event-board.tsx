@@ -458,11 +458,21 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
        {rows.filter(e => e.event_date === day).map(e => {
         const paidClass = e.client_paid === true ? 'eb-paid-yes' : e.client_paid === false ? 'eb-paid-no' : 'eb-paid-unknown';
         const paidLabel = e.client_paid === true ? '🟢 Pagado' : e.client_paid === false ? '🔴 Pendiente' : '🔵 Sin confirmar';
+        const cardStyle = e.client_paid === true 
+         ? { background: '#f0fdf4', borderLeft: '4px solid #16a34a', color: '#14532d' }
+         : e.client_paid === false
+         ? { background: '#fef2f2', borderLeft: '4px solid #dc2626', color: '#7f1d1d' }
+         : { background: '#eff6ff', borderLeft: '4px solid #2563eb', color: '#1e3a8a' };
+        const badgeStyle = e.client_paid === true
+         ? { background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }
+         : e.client_paid === false
+         ? { background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5' }
+         : { background: '#dbeafe', color: '#1d4ed8', border: '1px solid #93c5fd' };
         return (
-         <button key={e.id} className={paidClass} onClick={() => setDrawer(e.id)}>
-          <strong>{e.event_name}</strong>
-          <small>{clientName(e.client_id)} · {labels[e.status]}</small>
-          <span className="eb-paid-badge">{paidLabel}</span>
+         <button key={e.id} className={paidClass} style={cardStyle} onClick={() => setDrawer(e.id)}>
+          <strong style={{ color: 'inherit' }}>{e.event_name}</strong>
+          <small style={{ color: 'inherit', opacity: 0.85 }}>{clientName(e.client_id)} · {labels[e.status]}</small>
+          <span className="eb-paid-badge" style={badgeStyle}>{paidLabel}</span>
          </button>
         );
        })}
