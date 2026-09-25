@@ -472,7 +472,7 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
          <button key={e.id} className={paidClass} style={cardStyle} onClick={() => setDrawer(e.id)}>
           <strong style={{ color: 'inherit' }}>{e.event_name}</strong>
           <small style={{ color: 'inherit', opacity: 0.85 }}>{clientName(e.client_id)} · {labels[e.status]}</small>
-          <span className="eb-paid-badge" style={badgeStyle}>{paidLabel}</span>
+          <span className="eb-paid-badge" style={{ ...badgeStyle, cursor: disabled ? 'default' : 'pointer' }} title="Haz clic para cambiar estado de cobro" onClick={(evt) => { evt.stopPropagation(); if (!disabled) void update([e.id], { client_paid: e.client_paid === null ? true : e.client_paid === true ? false : null }); }}>{paidLabel}</span>
          </button>
         );
        })}
