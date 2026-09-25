@@ -32,7 +32,7 @@ export async function GET(){
    a.supabase.from('event_places').select('kind,name').eq('organization_id',org).order('name').range(0,999),
    a.supabase.from('suppliers').select('id,name').eq('organization_id',org).is('deleted_at',null).order('name').range(0,999),
    a.supabase.from('expenses').select('id,event_id,supplier_id,supplier_name,talent_id,total_cents,status,concept').eq('organization_id',org).not('event_id','is',null).neq('status','cancelled').range(0,999),
-   a.supabase.from('payments').select('id,event_id,talent_id,status,amount_cents').eq('organization_id',org).eq('kind','artist').range(0,999),
+   a.supabase.from('payments').select('id,event_id,talent_id,status,amount_cents,paid_on,created_at').eq('organization_id',org).eq('kind','artist').range(0,999),
    a.supabase.from('inventory_concepts').select('id,name,total_units,category,active,unit_kind').eq('organization_id',org).order('name'),
    a.supabase.from('inventory_items').select('id,concept_id,item_code,status').eq('organization_id',org),
    a.supabase.from('inventory_event_allocations').select('*').eq('organization_id',org)
@@ -56,37 +56,46 @@ export async function POST(req:Request){
  }
  const b=p.data,org=a.membership.organization_id;let r;
  if(b.action==='artistFee'){
-  if (b.status) {
-   const existing = await a.supabase.from('payments').select('id').eq('organization_id',org).eq('event_id',b.event_id).eq('talent_id',b.talent_id).eq('kind','artist');
-   if (existing.data && existing.data.length > 0) {
-    const up = await a.supabase.from('payments').update({
-     status: b.status,
-     paid_on: b.status === 'paid' ? new Date().toISOString().slice(0, 10) : null,
-     updated_at: new Date().toISOString()
-    }).eq('organization_id',org).eq('event_id',b.event_id).eq('talent_id',b.talent_id).eq('kind','artist');
-    if (up.error) return NextResponse.json({error: 'No se pudo cambiar el estado de pago: ' + up.error.message},{status: 400});
-   } else {
-    const ins = await a.supabase.from('payments').insert({
-     organization_id: org,
-     event_id: b.event_id,
-     talent_id: b.talent_id,
-     kind: 'artist',
-     direction: 'outbound',
-     amount_cents: b.fee_cents || 0,
-     status: b.status,
-     paid_on: b.status === 'paid' ? new Date().toISOString().slice(0, 10) : null
-    });
-    if (ins.error) return NextResponse.json({error: 'No se pudo registrar el pago: ' + ins.error.message},{status: 400});
+  const rpcRes = await a.supabase.rpc('upsert_artist_payment', {
+   target_org: org,
+   target_event: b.event_id,
+   target_talent: b.talent_id,
+   fee: b.fee_cents ?? null,
+   new_status: b.status || null,
+   new_paid_on: b.status === 'paid' ? new Date().toISOString() : null
+  });
+
+  if (rpcRes.error) {
+   if (b.status) {
+    const existing = await a.supabase.from('payments').select('id').eq('organization_id', org).eq('event_id', b.event_id).eq('talent_id', b.talent_id).eq('kind', 'artist').maybeSingle();
+    if (existing.data) {
+     await a.supabase.from('payments').update({
+      status: b.status,
+      paid_on: b.status === 'paid' ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString()
+     }).eq('id', existing.data.id);
+    } else {
+     await a.supabase.from('payments').insert({
+      organization_id: org,
+      event_id: b.event_id,
+      talent_id: b.talent_id,
+      kind: 'artist',
+      direction: 'outbound',
+      amount_cents: b.fee_cents || 0,
+      status: b.status,
+      paid_on: b.status === 'paid' ? new Date().toISOString() : null
+     });
+    }
+   }
+
+   if (b.fee_cents !== null && b.fee_cents !== undefined) {
+    await a.supabase.from('event_talent').update({ agreed_cost_cents: b.fee_cents }).eq('organization_id', org).eq('event_id', b.event_id).eq('talent_id', b.talent_id);
+    await a.supabase.from('payments').update({ amount_cents: b.fee_cents }).eq('organization_id', org).eq('event_id', b.event_id).eq('talent_id', b.talent_id).eq('kind', 'artist');
    }
   }
 
-  if (b.fee_cents !== null && b.fee_cents !== undefined) {
-   const result=await a.supabase.rpc('set_artist_budget',{target_org:org,target_event:b.event_id,target_talent:b.talent_id,fee:b.fee_cents});
-   if(result.error && !b.status) {
-    return NextResponse.json({error:result.error.code==='P0001'?result.error.message:'No se pudo guardar el sueldo completo. Comprueba que la actualización de Supabase esté aplicada.'},{status:409});
-   }
-  }
-  return NextResponse.json({ok:true});
+  await syncEventExpensesTotal(a.supabase, org, b.event_id);
+  return NextResponse.json({ ok: true });
  } else if (b.action === 'providerExpense') {
   const result=await a.supabase.rpc('set_event_provider_expense',{
    target_org:org,target_event:b.event_id,target_expense:b.expense_id||null,target_supplier:b.supplier_id||null,

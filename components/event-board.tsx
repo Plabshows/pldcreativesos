@@ -100,15 +100,29 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
  const renderArtistTable=(e:Event)=>{
   const assigned = data.assignments.filter(a=>a.event_id===e.id);
   const totalCents = assigned.reduce((sum,a)=>sum+Number(a.agreed_cost_cents||0),0);
+  const paidCents = assigned.reduce((sum, a) => {
+   const pay = (data.payments || []).find(p => p.event_id === e.id && p.talent_id === a.talent_id);
+   return sum + (pay?.status === 'paid' ? Number(a.agreed_cost_cents || 0) : 0);
+  }, 0);
+  const pendingCents = Math.max(0, totalCents - paidCents);
+
   return (
-   <div className="eb-artists-table-wrap" style={{marginTop:'14px',background:'#f0f7ff',padding:'14px',borderRadius:'10px',border:'1px solid #bfdbfe',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
+   <div className="eb-artists-table-wrap" style={{marginTop:'14px',background:'#f0f7ff',padding:'14px',borderRadius:'10px',border:'1px solid #bfdbfe',boxShadow:'0 1px 3px rgba(0,0,0,0.05)',overflowX:'auto'}}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'10px',flexWrap:'wrap',gap:'8px'}}>
      <strong style={{fontSize:'14px',color:'#1e3a8a',display:'flex',alignItems:'center',gap:'6px'}}>
       <span style={{fontSize:'16px'}}>💰</span> SUELDOS Y CACHÉS DE ARTISTAS ({assigned.length})
      </strong>
-     <span style={{fontSize:'13px',fontWeight:700,background:'#dbeafe',color:'#1e40af',padding:'4px 10px',borderRadius:'12px',border:'1px solid #93c5fd'}}>
-      Total Cachés: {(totalCents/100).toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2})} €
-     </span>
+     <div style={{display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center'}}>
+      <span style={{fontSize:'12px',fontWeight:700,background:'#dbeafe',color:'#1e40af',padding:'4px 8px',borderRadius:'8px',border:'1px solid #93c5fd'}}>
+       TOTAL CACHÉS: {(totalCents/100).toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2})} €
+      </span>
+      <span style={{fontSize:'12px',fontWeight:700,background:'#dcfce7',color:'#15803d',padding:'4px 8px',borderRadius:'8px',border:'1px solid #86efac'}}>
+       PAGADO: {(paidCents/100).toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2})} €
+      </span>
+      <span style={{fontSize:'12px',fontWeight:700,background:'#fef3c7',color:'#b45309',padding:'4px 8px',borderRadius:'8px',border:'1px solid #fcd34d'}}>
+       PENDIENTE: {(pendingCents/100).toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2})} €
+      </span>
+     </div>
     </div>
     {assigned.length===0?(
      <div style={{background:'#ffffff',border:'1px dashed #93c5fd',borderRadius:'8px',padding:'16px',textAlign:'center',margin:'6px 0'}}>
@@ -136,12 +150,15 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
         const pay = (data.payments || []).find(p => p.event_id === e.id && p.talent_id === a.talent_id);
         const st = pay?.status || 'pending';
 
-        const saveFee = (valStr: string) => {
+        const saveFee = async (valStr: string) => {
          const raw = valStr.replace(',', '.');
          const val = raw === '' ? null : Math.round(Number(raw) * 100);
          if (Number.isNaN(val)) return;
          if (val !== (a.agreed_cost_cents ?? null)) {
-          void save({ action: 'artistFee', event_id: e.id, talent_id: a.talent_id, fee_cents: val });
+          setNotice('Guardando sueldo…');
+          const ok = await save({ action: 'artistFee', event_id: e.id, talent_id: a.talent_id, fee_cents: val });
+          if(ok) setNotice('✓ Sueldo actualizado');
+          else setNotice('⚠ No se pudo guardar el sueldo');
          }
         };
 
@@ -154,7 +171,7 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
             <form style={{display:'inline-flex',alignItems:'center',gap:'6px'}} onSubmit={evt=>{
               evt.preventDefault();
               const formData = new FormData(evt.currentTarget);
-              saveFee(String(formData.get('fee') ?? ''));
+              void saveFee(String(formData.get('fee') ?? ''));
             }}>
              <input
               name="fee"
@@ -163,11 +180,11 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
               defaultValue={fee} disabled={disabled}
               aria-label={`Sueldo en euros para ${t?.real_name || 'artista'}`}
               style={{width:'110px',padding:'6px 8px',border:'1px solid #cbd5e1',borderRadius:'6px',fontSize:'13px',fontWeight:600,color:'#0f172a',background:'#ffffff'}}
-              onBlur={evt => saveFee(evt.target.value)}
+              onBlur={evt => void saveFee(evt.target.value)}
               onKeyDown={evt => {
                if (evt.key === 'Enter') {
                 evt.preventDefault();
-                saveFee(evt.currentTarget.value);
+                void saveFee(evt.currentTarget.value);
                 evt.currentTarget.blur();
                }
               }}
@@ -180,14 +197,29 @@ export function EventBoard({query='',onBack}:{query?:string;onBack:()=>void}){
            <select
             key={`${a.talent_id}-${st}`}
             value={st} disabled={disabled}
-            style={{padding:'6px 8px',border:'1px solid #cbd5e1',borderRadius:'6px',fontSize:'12px',fontWeight:500,color:st==='paid'?'#15803d':'#b45309',background:st==='paid'?'#f0fdf4':'#fffbeb'}}
-            onChange={evt=>{
+            aria-label={`Estado de pago para ${t?.real_name || 'artista'}`}
+            style={{
+             padding:'6px 10px',
+             borderRadius:'6px',
+             fontSize:'12px',
+             fontWeight:700,
+             maxWidth:'100%',
+             cursor:'pointer',
+             color: st==='paid'?'#15803d':'#b45309',
+             background: st==='paid'?'#f0fdf4':'#fffbeb',
+             border: `1px solid ${st==='paid'?'#86efac':'#fcd34d'}`
+            }}
+            onChange={async evt=>{
+             const nextStatus = evt.target.value;
              const currentFee = a.agreed_cost_cents == null ? null : Number(a.agreed_cost_cents);
-             void save({action:'artistFee',event_id:e.id,talent_id:a.talent_id,fee_cents:currentFee,status:evt.target.value});
+             setNotice('Guardando estado de pago…');
+             const ok = await save({action:'artistFee',event_id:e.id,talent_id:a.talent_id,fee_cents:currentFee,status:nextStatus});
+             if(ok) setNotice('✓ Pago actualizado');
+             else setNotice('⚠ No se pudo guardar el pago');
             }}
            >
-            <option value="pending">⏳ Pendiente</option>
-            <option value="paid">✓ Pagado</option>
+            <option value="pending">🕒 PENDIENTE</option>
+            <option value="paid">✅ PAGADO</option>
            </select>
           </td>
           <td style={{padding:'8px 10px',textAlign:'right'}}>
