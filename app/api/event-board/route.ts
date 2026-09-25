@@ -78,8 +78,7 @@ export async function POST(req:Request){
 
   if (existingPayments.data && existingPayments.data.length > 0) {
    const updatePayload: Record<string, unknown> = {
-    amount_cents: newAmount,
-    updated_at: new Date().toISOString()
+    amount_cents: newAmount
    };
    if (status) {
     updatePayload.status = status;
